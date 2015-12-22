@@ -10,3 +10,8 @@ import Foundation
 
 print("Hello, World!")
 
+guard let key = NSFileManager.defaultManager().contentsAtPath("persistent_key") else {
+    fatalError("can't read key")
+}
+let client = ApiClient(apiKey:key)
+

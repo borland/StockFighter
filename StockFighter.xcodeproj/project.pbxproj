@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D3A7C5151C29BFC000634BBF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C5141C29BFC000634BBF /* main.swift */; };
+		D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C51D1C29C14D00634BBF /* ApiClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,6 +26,9 @@
 /* Begin PBXFileReference section */
 		D3A7C5111C29BFC000634BBF /* StockFighter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = StockFighter; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3A7C5141C29BFC000634BBF /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D3A7C51B1C29BFE800634BBF /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.txt; sourceTree = "<group>"; };
+		D3A7C51C1C29C0A700634BBF /* persistent_key */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = persistent_key; sourceTree = "<group>"; };
+		D3A7C51D1C29C14D00634BBF /* ApiClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +45,7 @@
 		D3A7C5081C29BFC000634BBF = {
 			isa = PBXGroup;
 			children = (
+				D3A7C51B1C29BFE800634BBF /* README.txt */,
 				D3A7C5131C29BFC000634BBF /* StockFighter */,
 				D3A7C5121C29BFC000634BBF /* Products */,
 			);
@@ -58,6 +63,8 @@
 			isa = PBXGroup;
 			children = (
 				D3A7C5141C29BFC000634BBF /* main.swift */,
+				D3A7C51C1C29C0A700634BBF /* persistent_key */,
+				D3A7C51D1C29C14D00634BBF /* ApiClient.swift */,
 			);
 			path = StockFighter;
 			sourceTree = "<group>";
@@ -120,6 +127,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D3A7C5151C29BFC000634BBF /* main.swift in Sources */,
+				D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
