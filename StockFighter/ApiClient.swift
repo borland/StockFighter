@@ -8,13 +8,38 @@
 
 import Foundation
 
+
+func parseDate(str:String) throws -> NSDate {
+    let formatter = NSDateFormatter()
+    formatter.dateFormat = "yyyy-MM-ddThh:mm:ss.SSSSxxxZ"
+    
+    guard let d = formatter.dateFromString(str) else { throw ClientErrors.CantParseDate(str) }
+    return d
+}
+
+enum ClientErrors : ErrorType {
+    case CantReadKeyFile, KeyFileInvalidFormat
+    case UnexpectedJsonFor(String)
+    case CantParseDate(String)
+}
+
 // entry point, handles auth, http, etc
 // do I want to use async I/O? Probably, but not yet
 class ApiClient {
     private let _httpClient:HttpClient
     
+    convenience init(keyFile:String) throws {
+        guard let keyData = NSFileManager.defaultManager().contentsAtPath(keyFile) else {
+            throw ClientErrors.CantReadKeyFile
+        }
+        guard let key = NSString(data: keyData, encoding: NSUTF8StringEncoding) as? String else {
+            throw ClientErrors.KeyFileInvalidFormat
+        }
+        self.init(apiKey: key)
+    }
+    
     init(apiKey:String) {
-        _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api", apiKey:apiKey)
+        _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api/", apiKey:apiKey)
     }
     
     func heartbeat() -> HeartbeatResponse {
@@ -28,107 +53,77 @@ class ApiClient {
             return HeartbeatResponse(ok: false, error: "Unexpected error! \(e)")
         }
     }
+    
+    func venue(name:String) -> Venue {
+        return Venue(httpClient: _httpClient, name: name)
+    }
 }
 
-enum HttpErrors : ErrorType {
-    case NoResponse
-    case UnexpectedStatusCode(Int)
+class Venue {
+    struct HeartbeatResponse {
+        let ok:Bool
+        let venue:String
+    }
+    
+    struct StocksResponse {
+        let ok:Bool
+        let symbols:[Stock]
+    }
+    
+    struct OrderBookResponse {
+        let ok:Bool
+        let venue:String
+        let symbol:String
+        let bids:[OrderBookOrder]
+        let asks:[OrderBookOrder]
+        let ts:NSDate
+    }
+    
+    private let _httpClient:HttpClient
+    let name:String
+    init(httpClient:HttpClient, name:String) {
+        _httpClient = httpClient
+        self.name = name
+    }
+    
+    func heartbeat() throws -> Venue.HeartbeatResponse {
+        let d = try _httpClient.get("venues/\(name)/heartbeat") as! [String:AnyObject]
+        return Venue.HeartbeatResponse(ok: d["ok"] as! Bool, venue: d["venue"] as! String)
+    }
+    
+    func stocks() throws -> Venue.StocksResponse {
+        let d = try _httpClient.get("venues/\(name)/stocks") as! [String:AnyObject]
+        guard let symbols = d["symbols"] as? [[String:String]] else { throw ClientErrors.UnexpectedJsonFor("symbols") }
+        return Venue.StocksResponse(ok: d["ok"] as! Bool, symbols: symbols.map{
+            s in Stock(name: s["name"]!, symbol: s["symbol"]!)
+        })
+    }
+    
+    func orderBookForStock(symbol:String) throws -> OrderBookResponse {
+        let d = try _httpClient.get("venues/\(name)/stocks/\(symbol)") as! [String:AnyObject]
+        guard let bids = d["bids"] as? [[String:AnyObject]] else { throw ClientErrors.UnexpectedJsonFor("bids") }
+        guard let asks = d["asks"] as? [[String:AnyObject]] else { throw ClientErrors.UnexpectedJsonFor("bids") }
+        
+        let transform = { (x:[String:AnyObject]) in OrderBookOrder(price: x["price"] as! Int64, qty: x["qty"] as! Int, isBuy: x["isBuy"] as! Bool) }
+        
+        return Venue.OrderBookResponse(ok: d["ok"] as! Bool, venue: d["venue"] as! String, symbol: d["symbol"] as! String, bids: bids.map(transform), asks: asks.map(transform), ts: try parseDate(d["ts"] as! String))
+    }
 }
 
-class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
-    private let _queue = dispatch_queue_create("httpClientQueue", nil)
-    private let _baseUrl:NSURL
-    private let _apiKey:String
-    
-    // NSURLSession is inherently asynchronous; use NSCondition to block the calling thread
-    private var _syncData = [Int:(NSCondition, NSData?, NSError?)]()     // acquire _queue to access
-    
-    lazy private var _session:NSURLSession = {
-        let sessionConfig = NSURLSessionConfiguration.defaultSessionConfiguration()
-        let nsQueue = NSOperationQueue()
-        nsQueue.underlyingQueue = self._queue
-        return NSURLSession(configuration: sessionConfig, delegate: self, delegateQueue: nsQueue)
-        // we must invalidate the session at some point or we leak
-    }()
-    
-    init(baseUrlString:String, apiKey:String) {
-        guard let url = NSURL(string: baseUrlString) else { fatalError("invalid baseUrl \(baseUrlString)") }
-        _baseUrl = url
-        _apiKey = apiKey
-    }
-    
-    func get(path:String) throws -> AnyObject  {
-        guard let url = NSURL(string: path, relativeToURL: _baseUrl) else {
-            fatalError("Couldn't build a sensible url from \(path)")
-        }
-        let task = _session.dataTaskWithURL(url)
-        
-        let condition = NSCondition()
-        condition.lock()
-        dispatch_sync(_queue) {
-            self._syncData[task.taskIdentifier] = (condition, nil, nil)
-        }
-        task.resume()
-        condition.wait()
-        condition.unlock()
-        
-        var returnedError:NSError?
-        var returnedData:NSData?
-        dispatch_sync(_queue) {
-            guard let (_, data, err) = self._syncData[task.taskIdentifier] else {
-                fatalError("Can't get thing for taskId \(task.taskIdentifier)")
-            }
-            returnedData = data
-            returnedError = err
-            self._syncData.removeValueForKey(task.taskIdentifier)
-        }
-        
-        if let err = returnedError {
-            throw err
-        }
-        
-        guard let response = task.response as? NSHTTPURLResponse else { fatalError("No response from completed task?") }
-        if response.statusCode != 200 {
-            throw HttpErrors.UnexpectedStatusCode(response.statusCode)
-        }
-        guard let data = returnedData else {
-            throw HttpErrors.NoResponse
-        }
-        
-        return try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
-    }
-    
-    func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
-        // we'll be on _queue so accessing _conditions is safe
-        guard let (condition, oldData, error) = _syncData[dataTask.taskIdentifier] else {
-            fatalError("no NSCondition for task with id \(dataTask.taskIdentifier)")
-        }
-        
-        assert(oldData == nil, "Cannot assign data twice for response, I haven't written that code")
-        _syncData[dataTask.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
-    }
-    
-    func URLSession(session: NSURLSession, task: NSURLSessionTask, didCompleteWithError error: NSError?) {
-        // we'll be on _queue so accessing _conditions is safe
-        guard let (condition, data, _) = _syncData[task.taskIdentifier] else {
-            fatalError("no NSCondition for task with id \(task.taskIdentifier)")
-        }
-        
-        _syncData[task.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
-        
-        condition.lock()
-        condition.signal()
-        condition.unlock()
-    }
+struct OrderBookOrder {
+    let price:Int64
+    let qty:Int
+    let isBuy:Bool
+}
+
+struct Stock {
+    let name:String
+    let symbol:String
 }
 
 struct HeartbeatResponse {
     let ok:Bool
     let error:String
-}
-
-class Venue {
-    
 }
 
 enum OrderDirection {

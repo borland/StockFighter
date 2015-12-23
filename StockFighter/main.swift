@@ -10,8 +10,17 @@ import Foundation
 
 print("Hello, World!")
 
-guard let key = NSFileManager.defaultManager().contentsAtPath("persistent_key") else {
-    fatalError("can't read key")
-}
-let client = ApiClient(apiKey:key)
+let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key")
+
+print("heartbeat");
+
+let venue = client.venue("TVYIEX")
+let hr = try! venue.heartbeat()
+print("heartbeat: ", hr.ok, hr.venue);
+
+let stocks = try! venue.stocks()
+print(stocks.symbols)
+
+let orderBook = try! venue.orderBookForStock("DOD")
+print(orderBook)
 

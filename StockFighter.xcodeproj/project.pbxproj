@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D3A4FC351C2B19B000642E74 /* HttpClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A4FC341C2B19B000642E74 /* HttpClient.swift */; };
 		D3A7C5151C29BFC000634BBF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C5141C29BFC000634BBF /* main.swift */; };
 		D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C51D1C29C14D00634BBF /* ApiClient.swift */; };
 /* End PBXBuildFile section */
@@ -24,6 +25,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D3A4FC341C2B19B000642E74 /* HttpClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HttpClient.swift; sourceTree = "<group>"; };
 		D3A7C5111C29BFC000634BBF /* StockFighter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = StockFighter; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3A7C5141C29BFC000634BBF /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		D3A7C51B1C29BFE800634BBF /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.txt; sourceTree = "<group>"; };
@@ -65,6 +67,7 @@
 				D3A7C5141C29BFC000634BBF /* main.swift */,
 				D3A7C51C1C29C0A700634BBF /* persistent_key */,
 				D3A7C51D1C29C14D00634BBF /* ApiClient.swift */,
+				D3A4FC341C2B19B000642E74 /* HttpClient.swift */,
 			);
 			path = StockFighter;
 			sourceTree = "<group>";
@@ -127,6 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D3A7C5151C29BFC000634BBF /* main.swift in Sources */,
+				D3A4FC351C2B19B000642E74 /* HttpClient.swift in Sources */,
 				D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -247,6 +251,7 @@
 				D3A7C51A1C29BFC000634BBF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
