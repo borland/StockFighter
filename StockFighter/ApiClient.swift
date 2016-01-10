@@ -11,7 +11,7 @@ import Foundation
 
 func parseDate(str:String) throws -> NSDate {
     let formatter = NSDateFormatter()
-    formatter.dateFormat = "yyyy-MM-ddThh:mm:ss.SSSSxxxZ"
+    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
     
     guard let d = formatter.dateFromString(str) else { throw ClientErrors.CantParseDate(str) }
     return d
@@ -101,17 +101,23 @@ class Venue {
     
     func orderBookForStock(symbol:String) throws -> OrderBookResponse {
         let d = try _httpClient.get("venues/\(name)/stocks/\(symbol)") as! [String:AnyObject]
-        guard let bids = d["bids"] as? [[String:AnyObject]] else { throw ClientErrors.UnexpectedJsonFor("bids") }
-        guard let asks = d["asks"] as? [[String:AnyObject]] else { throw ClientErrors.UnexpectedJsonFor("bids") }
+        let bids = d["bids"] as? [[String:AnyObject]] ?? []
+        let asks = d["asks"] as? [[String:AnyObject]] ?? []
         
-        let transform = { (x:[String:AnyObject]) in OrderBookOrder(price: x["price"] as! Int64, qty: x["qty"] as! Int, isBuy: x["isBuy"] as! Bool) }
+        let transform = { (x:[String:AnyObject]) in OrderBookOrder(price: x["price"] as! Int, qty: x["qty"] as! Int, isBuy: x["isBuy"] as! Bool) }
         
-        return Venue.OrderBookResponse(ok: d["ok"] as! Bool, venue: d["venue"] as! String, symbol: d["symbol"] as! String, bids: bids.map(transform), asks: asks.map(transform), ts: try parseDate(d["ts"] as! String))
+        return Venue.OrderBookResponse(
+            ok: d["ok"] as! Bool,
+            venue: d["venue"] as! String,
+            symbol: d["symbol"] as! String,
+            bids: bids.map(transform),
+            asks: asks.map(transform),
+            ts: try parseDate(d["ts"] as! String))
     }
 }
 
 struct OrderBookOrder {
-    let price:Int64
+    let price:Int
     let qty:Int
     let isBuy:Bool
 }
