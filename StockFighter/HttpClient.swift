@@ -23,6 +23,7 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
     
     lazy private var _session:NSURLSession = {
         let sessionConfig = NSURLSessionConfiguration.defaultSessionConfiguration()
+        sessionConfig.HTTPAdditionalHeaders = ["X-Starfighter-Authorization": self._apiKey]
         let nsQueue = NSOperationQueue()
         nsQueue.underlyingQueue = self._queue
         return NSURLSession(configuration: sessionConfig, delegate: self, delegateQueue: nsQueue)
@@ -36,10 +37,33 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
     }
     
     func get(path:String) throws -> AnyObject  {
-        guard let url = NSURL(string: path, relativeToURL: _baseUrl) else {
-            fatalError("Couldn't build a sensible url from \(path)")
+        return try sendRequest(NSURLRequest(URL: urlForPath(path)))
+    }
+    
+    func post(path:String, body:AnyObject? = nil) throws -> AnyObject {
+        let request = NSMutableURLRequest(URL: urlForPath(path))
+        request.HTTPMethod = "POST"
+        if let b = body {
+            request.HTTPBody = try NSJSONSerialization.dataWithJSONObject(b, options: NSJSONWritingOptions(rawValue: 0))
         }
-        let task = _session.dataTaskWithURL(url)
+        return try sendRequest(request)
+    }
+    
+    func delete(path:String) throws -> AnyObject {
+        let request = NSMutableURLRequest(URL: urlForPath(path))
+        request.HTTPMethod = "DELETE"
+        return try sendRequest(request)
+    }
+    
+    private func urlForPath(path:String) -> NSURL {
+        if let url = NSURL(string: path, relativeToURL: _baseUrl) {
+            return url
+        }
+        fatalError("Couldn't build a sensible url from \(path)")
+    }
+    
+    private func sendRequest(request:NSURLRequest) throws -> AnyObject {
+        let task = _session.dataTaskWithRequest(request)
         
         let condition = NSCondition()
         condition.lock()

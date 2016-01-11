@@ -21,28 +21,36 @@ enum ClientErrors : ErrorType {
     case CantReadKeyFile, KeyFileInvalidFormat
     case UnexpectedJsonFor(String)
     case CantParseDate(String)
+    case CantParseEnum(String, String)
 }
 
 // entry point, handles auth, http, etc
 // do I want to use async I/O? Probably, but not yet
 class ApiClient {
     private let _httpClient:HttpClient
+    let account:String
     
-    convenience init(keyFile:String) throws {
+    convenience init(keyFile:String, account:String) throws {
         guard let keyData = NSFileManager.defaultManager().contentsAtPath(keyFile) else {
             throw ClientErrors.CantReadKeyFile
         }
         guard let key = NSString(data: keyData, encoding: NSUTF8StringEncoding) as? String else {
             throw ClientErrors.KeyFileInvalidFormat
         }
-        self.init(apiKey: key)
+        self.init(apiKey: key, account: account)
     }
     
-    init(apiKey:String) {
+    init(apiKey:String, account:String) {
         _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api/", apiKey:apiKey)
+        self.account = account
     }
     
-    func heartbeat() -> HeartbeatResponse {
+    struct HeartbeatResponse {
+        let ok:Bool
+        let error:String
+    }
+    
+    func heartbeat() -> ApiClient.HeartbeatResponse {
         do {
             let d = try _httpClient.get("heartbeat") as! [String:AnyObject]
             return HeartbeatResponse(ok: d["ok"] as! Bool, error: d["error"] as! String)
@@ -55,7 +63,7 @@ class ApiClient {
     }
     
     func venue(name:String) -> Venue {
-        return Venue(httpClient: _httpClient, name: name)
+        return Venue(httpClient: _httpClient, account:account, name: name)
     }
 }
 
@@ -76,13 +84,78 @@ class Venue {
         let symbol:String
         let bids:[OrderBookOrder]
         let asks:[OrderBookOrder]
-        let ts:NSDate
+        let timeStamp:NSDate
+    }
+    
+    struct OrderFill {
+        let price:Int
+        let qty: Int
+        let timeStamp: NSDate
+        
+        init(dictionary:[String:AnyObject]) throws {
+            price = dictionary["price"] as! Int
+            qty = dictionary["qty"] as! Int
+            timeStamp = try parseDate(dictionary["ts"] as! String)
+        }
+    }
+    
+    struct OrderResponse {
+        let ok:Bool
+        let venue:String
+        let symbol:String
+        let direction:OrderDirection
+        let originalQty:Int
+        let outstandingQty:Int // this is the quantity *left outstanding*
+        let price:Int // the price on the order -- may not match that of fills!
+        let type: OrderType
+        let id:Int // guaranteed unique *on this venue*
+        let account:String
+        let timeStamp:NSDate // ISO-8601 timestamp for when we received order
+        let fills:[OrderFill] // may have zero or multiple fills.  Note this order presumably has a total of 80 shares worth
+        let totalFilled:Int
+        let open:Bool
+        
+        init(dictionary:[String:AnyObject]) throws {
+            ok = dictionary["ok"] as! Bool
+            venue = dictionary["venue"] as! String
+            symbol = dictionary["symbol"] as! String
+            direction = OrderDirection(rawValue: dictionary["direction"] as! String)!
+            originalQty = dictionary["originalQty"] as! Int
+            outstandingQty = dictionary["qty"] as! Int
+            price = dictionary["price"] as! Int
+            type = OrderType(rawValue: dictionary["orderType"] as! String)! // docs are wrong, this comes through as "orderType", not "type"
+            id = dictionary["id"] as! Int
+            account = dictionary["account"] as! String
+            timeStamp = try parseDate(dictionary["ts"] as! String)
+            self.fills = try (dictionary["fills"] as? [[String:AnyObject]] ?? []).map{ x in try OrderFill(dictionary: x) }
+            totalFilled = dictionary["totalFilled"] as! Int
+            open = dictionary["open"] as! Bool
+        }
+    }
+    
+    struct QuoteResponse {
+        let ok:Bool
+        let venue:String
+        let symbol:String
+        let bidBestPrice:Int // best price currently bid for the stock
+        let askBestPrice:Int // // best price currently offered for the stock
+        let bidSize:Int // aggregate size of all orders at the best bid
+        let askSize:Int // aggregate size of all orders at the best ask
+        let bidDepth:Int  // aggregate size of *all bids*
+        let askDepth:Int // aggregate size of *all asks*
+        let lastTradePrice:Int // price of last trade
+        let lastTradeSize:Int // quantity of last trade
+        let lastTradeTimeStamp:NSDate // timestamp of last trade
+        let quoteTimeStamp:NSDate // ts we last updated quote at (server-side)
     }
     
     private let _httpClient:HttpClient
+    let account:String
     let name:String
-    init(httpClient:HttpClient, name:String) {
+    
+    init(httpClient:HttpClient, account:String, name:String) {
         _httpClient = httpClient
+        self.account = account
         self.name = name
     }
     
@@ -91,12 +164,12 @@ class Venue {
         return Venue.HeartbeatResponse(ok: d["ok"] as! Bool, venue: d["venue"] as! String)
     }
     
-    func stocks() throws -> Venue.StocksResponse {
+    func stocks() throws -> StocksResponse {
         let d = try _httpClient.get("venues/\(name)/stocks") as! [String:AnyObject]
         guard let symbols = d["symbols"] as? [[String:String]] else { throw ClientErrors.UnexpectedJsonFor("symbols") }
-        return Venue.StocksResponse(ok: d["ok"] as! Bool, symbols: symbols.map{
-            s in Stock(name: s["name"]!, symbol: s["symbol"]!)
-        })
+        return StocksResponse(
+            ok: d["ok"] as! Bool,
+            symbols: symbols.map{ s in Stock(name: s["name"]!, symbol: s["symbol"]!) })
     }
     
     func orderBookForStock(symbol:String) throws -> OrderBookResponse {
@@ -106,13 +179,52 @@ class Venue {
         
         let transform = { (x:[String:AnyObject]) in OrderBookOrder(price: x["price"] as! Int, qty: x["qty"] as! Int, isBuy: x["isBuy"] as! Bool) }
         
-        return Venue.OrderBookResponse(
+        return OrderBookResponse(
             ok: d["ok"] as! Bool,
             venue: d["venue"] as! String,
             symbol: d["symbol"] as! String,
             bids: bids.map(transform),
             asks: asks.map(transform),
-            ts: try parseDate(d["ts"] as! String))
+            timeStamp: try parseDate(d["ts"] as! String))
+    }
+    
+    func quoteForStock(symbol:String) throws -> QuoteResponse {
+        let d = try _httpClient.get("venues/\(name)/stocks/\(symbol)/quote") as! [String:AnyObject]
+        return QuoteResponse(
+            ok: d["ok"] as! Bool,
+            venue: d["venue"] as! String,
+            symbol: d["symbol"] as! String,
+            bidBestPrice: d["bid"] as! Int,
+            askBestPrice: d["ask"] as! Int,
+            bidSize: d["bidSize"] as! Int,
+            askSize: d["askSize"] as! Int,
+            bidDepth: d["bidDepth"] as! Int,
+            askDepth: d["askDepth"] as! Int,
+            lastTradePrice: d["last"] as! Int,
+            lastTradeSize: d["lastSize"] as! Int,
+            lastTradeTimeStamp: try parseDate(d["lastTrade"] as! String),
+            quoteTimeStamp: try parseDate(d["quoteTime"] as! String))
+    }
+    
+    func placeOrderForStock(symbol:String, price:Int, qty:Int, direction:OrderDirection, type:OrderType = .Limit) throws -> OrderResponse {
+        let request:[String:AnyObject] = [
+            "account":account,
+            "venue":name,
+            "stock":symbol,
+            "price":price,
+            "qty":qty,
+            "direction":direction.rawValue,
+            "orderType":type.rawValue
+        ]
+
+        let d = try _httpClient.post("venues/\(name)/stocks/\(symbol)/orders", body: request)
+        return try OrderResponse(dictionary: d as! [String:AnyObject])
+    }
+    
+    func cancelOrderForStock(symbol:String, id:Int) throws -> OrderResponse {
+        let d = try _httpClient.delete("venues/\(name)/stocks/\(symbol)/orders/\(id)")
+        return try OrderResponse(dictionary: d as! [String:AnyObject])
+
     }
 }
 
@@ -127,47 +239,10 @@ struct Stock {
     let symbol:String
 }
 
-struct HeartbeatResponse {
-    let ok:Bool
-    let error:String
+enum OrderDirection : String {
+    case Buy = "buy", Sell = "sell"
 }
 
-enum OrderDirection {
-    case Buy, Sell
-}
-
-enum OrderType {
-    case Market, Limit, FillOrKill, ImmediateOrCancel
-}
-
-struct Order {
-    let account:String
-    let venue:String
-    let symbol:String
-    let price:Int64  // in cents so $25.30 is 2530
-    let qty:Int32
-    let direction:OrderDirection
-    let type:OrderType
-}
-
-struct OrderFill {
-    let price:Int64
-    let qty:Int
-    let timeStamp:NSDate
-}
-
-struct OrderResponse {
-    let ok:Bool
-    let open:Bool
-    let id:Int64
-    let account:String
-    let venue:String
-    let symbol:String
-    let price:Int64  // in cents so $25.30 is 2530
-    let originalQty:Int32
-    let qty:Int32
-    let direction:OrderDirection
-    let timeStamp:NSDate
-    let fills:[OrderFill]
-    let totalFilled:Int
+enum OrderType : String {
+    case Market = "market", Limit = "limit", FillOrKill = "fill-or-kill", ImmediateOrCancel = "immediate-or-cancel"
 }
