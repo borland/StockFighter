@@ -115,21 +115,21 @@ class Venue {
         let totalFilled:Int
         let open:Bool
         
-        init(dictionary:[String:AnyObject]) throws {
-            ok = dictionary["ok"] as! Bool
-            venue = dictionary["venue"] as! String
-            symbol = dictionary["symbol"] as! String
-            direction = OrderDirection(rawValue: dictionary["direction"] as! String)!
-            originalQty = dictionary["originalQty"] as! Int
-            outstandingQty = dictionary["qty"] as! Int
-            price = dictionary["price"] as! Int
-            type = OrderType(rawValue: dictionary["orderType"] as! String)! // docs are wrong, this comes through as "orderType", not "type"
-            id = dictionary["id"] as! Int
-            account = dictionary["account"] as! String
-            timeStamp = try parseDate(dictionary["ts"] as! String)
-            self.fills = try (dictionary["fills"] as? [[String:AnyObject]] ?? []).map{ x in try OrderFill(dictionary: x) }
-            totalFilled = dictionary["totalFilled"] as! Int
-            open = dictionary["open"] as! Bool
+        init(dictionary d:[String:AnyObject]) throws {
+            ok = d["ok"] as! Bool
+            venue = d["venue"] as! String
+            symbol = d["symbol"] as! String
+            direction = OrderDirection(rawValue: d["direction"] as! String)!
+            originalQty = d["originalQty"] as! Int
+            outstandingQty = d["qty"] as! Int
+            price = d["price"] as! Int
+            type = OrderType(rawValue: d["orderType"] as! String)! // docs are wrong, this comes through as "orderType", not "type"
+            id = d["id"] as! Int
+            account = d["account"] as! String
+            timeStamp = try parseDate(d["ts"] as! String)
+            self.fills = try (d["fills"] as? [[String:AnyObject]] ?? []).map{ x in try OrderFill(dictionary: x) }
+            totalFilled = d["totalFilled"] as! Int
+            open = d["open"] as! Bool
         }
     }
     
@@ -137,8 +137,8 @@ class Venue {
         let ok:Bool
         let venue:String
         let symbol:String
-        let bidBestPrice:Int // best price currently bid for the stock
-        let askBestPrice:Int // // best price currently offered for the stock
+        let bidBestPrice:Int? // best price currently bid for the stock
+        let askBestPrice:Int? // // best price currently offered for the stock
         let bidSize:Int // aggregate size of all orders at the best bid
         let askSize:Int // aggregate size of all orders at the best ask
         let bidDepth:Int  // aggregate size of *all bids*
@@ -147,6 +147,22 @@ class Venue {
         let lastTradeSize:Int // quantity of last trade
         let lastTradeTimeStamp:NSDate // timestamp of last trade
         let quoteTimeStamp:NSDate // ts we last updated quote at (server-side)
+        
+        init(dictionary d:[String:AnyObject]) throws {
+            ok = d["ok"] as! Bool
+            venue = d["venue"] as! String
+            symbol =  d["symbol"] as! String
+            bidBestPrice = d["bid"] as? Int // may not be present in the response
+            askBestPrice = d["ask"] as? Int // may not be present in the response
+            bidSize = d["bidSize"] as! Int
+            askSize = d["askSize"] as! Int
+            bidDepth = d["bidDepth"] as! Int
+            askDepth = d["askDepth"] as! Int
+            lastTradePrice = d["last"] as! Int
+            lastTradeSize = d["lastSize"] as! Int
+            lastTradeTimeStamp = try parseDate(d["lastTrade"] as! String)
+            quoteTimeStamp = try parseDate(d["quoteTime"] as! String)
+        }
     }
     
     private let _httpClient:HttpClient
@@ -190,20 +206,7 @@ class Venue {
     
     func quoteForStock(symbol:String) throws -> QuoteResponse {
         let d = try _httpClient.get("venues/\(name)/stocks/\(symbol)/quote") as! [String:AnyObject]
-        return QuoteResponse(
-            ok: d["ok"] as! Bool,
-            venue: d["venue"] as! String,
-            symbol: d["symbol"] as! String,
-            bidBestPrice: d["bid"] as! Int,
-            askBestPrice: d["ask"] as! Int,
-            bidSize: d["bidSize"] as! Int,
-            askSize: d["askSize"] as! Int,
-            bidDepth: d["bidDepth"] as! Int,
-            askDepth: d["askDepth"] as! Int,
-            lastTradePrice: d["last"] as! Int,
-            lastTradeSize: d["lastSize"] as! Int,
-            lastTradeTimeStamp: try parseDate(d["lastTrade"] as! String),
-            quoteTimeStamp: try parseDate(d["quoteTime"] as! String))
+        return try QuoteResponse(dictionary: d)
     }
     
     func placeOrderForStock(symbol:String, price:Int, qty:Int, direction:OrderDirection, type:OrderType = .Limit) throws -> OrderResponse {
