@@ -10,8 +10,7 @@
 		D3A4FC351C2B19B000642E74 /* HttpClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A4FC341C2B19B000642E74 /* HttpClient.swift */; };
 		D3A7C5151C29BFC000634BBF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C5141C29BFC000634BBF /* main.swift */; };
 		D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C51D1C29C14D00634BBF /* ApiClient.swift */; };
-		D3F543B51C46C51E00C77F65 /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D3F543B41C46C51E00C77F65 /* SocketRocket.framework */; };
-		D3F543B71C46C59D00C77F65 /* SocketRocket.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3F543B41C46C51E00C77F65 /* SocketRocket.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D3F543BA1C46C81700C77F65 /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D3F543B91C46C81700C77F65 /* SocketRocket.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -21,7 +20,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				D3F543B71C46C59D00C77F65 /* SocketRocket.framework in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,8 +32,7 @@
 		D3A7C51B1C29BFE800634BBF /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.txt; sourceTree = "<group>"; };
 		D3A7C51C1C29C0A700634BBF /* persistent_key */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = persistent_key; sourceTree = "<group>"; };
 		D3A7C51D1C29C14D00634BBF /* ApiClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
-		D3F543B41C46C51E00C77F65 /* SocketRocket.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SocketRocket.framework; path = external/SocketRocket.framework; sourceTree = "<group>"; };
-		D3F543B81C46C63000C77F65 /* Objc-bridging-header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Objc-bridging-header.h"; sourceTree = "<group>"; };
+		D3F543B91C46C81700C77F65 /* SocketRocket.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SocketRocket.framework; path = external/SocketRocket.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,7 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D3F543B51C46C51E00C77F65 /* SocketRocket.framework in Frameworks */,
+				D3F543BA1C46C81700C77F65 /* SocketRocket.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,7 +51,7 @@
 			isa = PBXGroup;
 			children = (
 				D3A7C51B1C29BFE800634BBF /* README.txt */,
-				D3F543B41C46C51E00C77F65 /* SocketRocket.framework */,
+				D3F543B91C46C81700C77F65 /* SocketRocket.framework */,
 				D3A7C5131C29BFC000634BBF /* StockFighter */,
 				D3A7C5121C29BFC000634BBF /* Products */,
 			);
@@ -75,7 +72,6 @@
 				D3A7C51C1C29C0A700634BBF /* persistent_key */,
 				D3A7C51D1C29C14D00634BBF /* ApiClient.swift */,
 				D3A4FC341C2B19B000642E74 /* HttpClient.swift */,
-				D3F543B81C46C63000C77F65 /* Objc-bridging-header.h */,
 			);
 			path = StockFighter;
 			sourceTree = "<group>";
@@ -234,7 +230,7 @@
 					"$(PROJECT_DIR)/external",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "StockFighter/Objc-bridging-header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 			};
 			name = Debug;
 		};
@@ -246,7 +242,7 @@
 					"$(PROJECT_DIR)/external",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "StockFighter/Objc-bridging-header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 			};
 			name = Release;
 		};
