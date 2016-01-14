@@ -27,17 +27,19 @@ do {
     // if the order comes back still open, cancel it and repeat the quote process again
     // if the order comes back closed, repeat the quote process again
     // stop when we've got all of our 100k shares
+
     var sharesToBuy = 100_000
-    while sharesToBuy > 0 {
-        let quote = try venue.quoteForStock(STOCK)
-        guard let askBestPrice = quote.askBestPrice else { continue }
+    
+    let ws = venue.tickerTapeForStock(STOCK) { quote in
+
+        guard let askBestPrice = quote.askBestPrice else { return }
         
         print("ordering \(quote.askSize) shares at price \(askBestPrice)")
         
         let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
         if response.open { // didn't go filled. We could sit and wait but we have no patience
             try venue.cancelOrderForStock(response.symbol, id: response.id)
-            continue
+            return
         }
         
         // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
@@ -47,7 +49,11 @@ do {
         print("\(filled) in \(response.fills.count) fills, \(sharesToBuy) remaining")
     }
     
-    print("all done")
+    // keep the program running so async websocket doesn't terminate
+    print("press enter to quit")
+    let _  = readLine()
+    
+    ws.close()
     
 } catch let err {
     print("Err:", err)

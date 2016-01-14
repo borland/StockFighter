@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import SocketRocket
 
 enum HttpErrors : ErrorType {
     case NoResponse

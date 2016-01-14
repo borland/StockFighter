@@ -71,11 +71,40 @@ class Venue {
     struct HeartbeatResponse {
         let ok:Bool
         let venue:String
+        
+        init(dictionary d:[String:AnyObject]) {
+            ok = d["ok"] as! Bool
+            venue = d["venue"] as! String
+        }
+    }
+    
+    struct Stock {
+        let name:String
+        let symbol:String
     }
     
     struct StocksResponse {
         let ok:Bool
         let symbols:[Stock]
+        
+        init(dictionary d:[String:AnyObject]) throws {
+            guard let symbolsArr = d["symbols"] as? [[String:String]] else { throw ClientErrors.UnexpectedJsonFor("symbols") }
+            
+            ok = d["ok"] as! Bool
+            symbols = symbolsArr.map{ s in Stock(name: s["name"]!, symbol: s["symbol"]!) }
+        }
+    }
+    
+    struct OrderBookOrder {
+        let price:Int
+        let qty:Int
+        let isBuy:Bool
+        
+        init(dictionary d:[String:AnyObject]) {
+            price = d["price"] as! Int
+            qty = d ["qty"] as! Int
+            isBuy = d["isBuy"] as! Bool
+        }
     }
     
     struct OrderBookResponse {
@@ -85,6 +114,20 @@ class Venue {
         let bids:[OrderBookOrder]
         let asks:[OrderBookOrder]
         let timeStamp:NSDate
+        
+        init(dictionary d:[String:AnyObject]) throws {
+            let bidsArr = d["bids"] as? [[String:AnyObject]] ?? []
+            let asksArr = d["asks"] as? [[String:AnyObject]] ?? []
+            
+            let transform = { (x:[String:AnyObject]) in OrderBookOrder(dictionary: x) }
+            
+            ok = d["ok"] as! Bool
+            venue = d["venue"] as! String
+            symbol = d["symbol"] as! String
+            bids = bidsArr.map(transform)
+            asks = asksArr.map(transform)
+            timeStamp = try parseDate(d["ts"] as! String)
+        }
     }
     
     struct OrderFill {
@@ -177,31 +220,17 @@ class Venue {
     
     func heartbeat() throws -> Venue.HeartbeatResponse {
         let d = try _httpClient.get("venues/\(name)/heartbeat") as! [String:AnyObject]
-        return Venue.HeartbeatResponse(ok: d["ok"] as! Bool, venue: d["venue"] as! String)
+        return Venue.HeartbeatResponse(dictionary: d)
     }
     
     func stocks() throws -> StocksResponse {
         let d = try _httpClient.get("venues/\(name)/stocks") as! [String:AnyObject]
-        guard let symbols = d["symbols"] as? [[String:String]] else { throw ClientErrors.UnexpectedJsonFor("symbols") }
-        return StocksResponse(
-            ok: d["ok"] as! Bool,
-            symbols: symbols.map{ s in Stock(name: s["name"]!, symbol: s["symbol"]!) })
+        return try StocksResponse(dictionary: d)
     }
     
     func orderBookForStock(symbol:String) throws -> OrderBookResponse {
         let d = try _httpClient.get("venues/\(name)/stocks/\(symbol)") as! [String:AnyObject]
-        let bids = d["bids"] as? [[String:AnyObject]] ?? []
-        let asks = d["asks"] as? [[String:AnyObject]] ?? []
-        
-        let transform = { (x:[String:AnyObject]) in OrderBookOrder(price: x["price"] as! Int, qty: x["qty"] as! Int, isBuy: x["isBuy"] as! Bool) }
-        
-        return OrderBookResponse(
-            ok: d["ok"] as! Bool,
-            venue: d["venue"] as! String,
-            symbol: d["symbol"] as! String,
-            bids: bids.map(transform),
-            asks: asks.map(transform),
-            timeStamp: try parseDate(d["ts"] as! String))
+        return try OrderBookResponse(dictionary: d)
     }
     
     func quoteForStock(symbol:String) throws -> QuoteResponse {
@@ -227,19 +256,32 @@ class Venue {
     func cancelOrderForStock(symbol:String, id:Int) throws -> OrderResponse {
         let d = try _httpClient.delete("venues/\(name)/stocks/\(symbol)/orders/\(id)")
         return try OrderResponse(dictionary: d as! [String:AnyObject])
-
     }
-}
-
-struct OrderBookOrder {
-    let price:Int
-    let qty:Int
-    let isBuy:Bool
-}
-
-struct Stock {
-    let name:String
-    let symbol:String
+    
+    // returns a websocketClient. It's up to the caller to close the client when done
+    func tickerTapeWithCallback(callback:(QuoteResponse) -> ()) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"){ obj in
+            guard let d = obj as? [String:AnyObject] else { return }
+            do {
+                let response = try QuoteResponse(dictionary: d)
+                callback(response)
+            } catch let err {
+                print("error on websocket queue: \(err)")
+            }
+        }
+    }
+    
+    func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> ()) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"){ obj in
+            guard let d = obj as? [String:AnyObject] else { return }
+            do {
+                let response = try QuoteResponse(dictionary: d)
+                callback(response)
+            } catch let err {
+                print("error on websocket queue: \(err)")
+            }
+        }
+    }
 }
 
 enum OrderDirection : String {

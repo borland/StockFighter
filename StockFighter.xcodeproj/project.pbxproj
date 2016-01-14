@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D35F5C761C481192002062EB /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35F5C751C481192002062EB /* WebSocketClient.swift */; };
 		D3A4FC351C2B19B000642E74 /* HttpClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A4FC341C2B19B000642E74 /* HttpClient.swift */; };
 		D3A7C5151C29BFC000634BBF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C5141C29BFC000634BBF /* main.swift */; };
 		D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A7C51D1C29C14D00634BBF /* ApiClient.swift */; };
@@ -26,6 +27,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D35F5C751C481192002062EB /* WebSocketClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
 		D3A4FC341C2B19B000642E74 /* HttpClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HttpClient.swift; sourceTree = "<group>"; };
 		D3A7C5111C29BFC000634BBF /* StockFighter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = StockFighter; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3A7C5141C29BFC000634BBF /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 				D3A7C51C1C29C0A700634BBF /* persistent_key */,
 				D3A7C51D1C29C14D00634BBF /* ApiClient.swift */,
 				D3A4FC341C2B19B000642E74 /* HttpClient.swift */,
+				D35F5C751C481192002062EB /* WebSocketClient.swift */,
 			);
 			path = StockFighter;
 			sourceTree = "<group>";
@@ -135,6 +138,7 @@
 			files = (
 				D3A7C5151C29BFC000634BBF /* main.swift in Sources */,
 				D3A4FC351C2B19B000642E74 /* HttpClient.swift in Sources */,
+				D35F5C761C481192002062EB /* WebSocketClient.swift in Sources */,
 				D3A7C51E1C29C14D00634BBF /* ApiClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
