@@ -159,7 +159,7 @@ class Venue {
         let open:Bool
         
         init(dictionary d:[String:AnyObject]) throws {
-            ok = d["ok"] as! Bool
+            ok = d["ok"] as? Bool ?? true // if we come in via the websocket ok isn't present (it's in the parent)
             venue = d["venue"] as! String
             symbol = d["symbol"] as! String
             direction = OrderDirection(rawValue: d["direction"] as! String)!
@@ -258,7 +258,20 @@ class Venue {
         return try OrderResponse(dictionary: d as! [String:AnyObject])
     }
     
-    private func processTickerTapeResponse(obj:AnyObject, callback:(QuoteResponse) -> ()) {
+    // returns a websocketClient. It's up to the caller to close the client when done
+    func tickerTapeWithCallback(callback:(QuoteResponse) -> Void) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"){ obj in
+            self.processTickerTapeResponse(obj, callback: callback)
+        }
+    }
+    
+    func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> Void) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"){ obj in
+            self.processTickerTapeResponse(obj, callback: callback)
+        }
+    }
+    
+    private func processTickerTapeResponse(obj:AnyObject, callback:(QuoteResponse) -> Void) {
         guard let d = obj as? [String:AnyObject] else { return }
         guard let ok = d["ok"] as? Bool where ok ==  true else {
             print("websocket callback missing ok:true")
@@ -276,16 +289,33 @@ class Venue {
         }
     }
     
-    // returns a websocketClient. It's up to the caller to close the client when done
-    func tickerTapeWithCallback(callback:(QuoteResponse) -> ()) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"){ obj in
-            self.processTickerTapeResponse(obj, callback: callback)
+    func executionsWithCallback(callback:(OrderResponse) -> Void) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions"){ obj in
+            self.processExecutionsResponse(obj, callback: callback)
         }
     }
     
-    func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> ()) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"){ obj in
-            self.processTickerTapeResponse(obj, callback: callback)
+    func executionsForStock(symbol:String, callback:(OrderResponse) -> Void) -> WebSocketClient {
+        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stock/\(symbol)"){ obj in
+            self.processExecutionsResponse(obj, callback: callback)
+        }
+    }
+    
+    private func processExecutionsResponse(obj:AnyObject, callback:(OrderResponse) -> Void) {
+        guard let d = obj as? [String:AnyObject] else { return }
+        guard let ok = d["ok"] as? Bool where ok ==  true else {
+            print("websocket callback missing ok:true")
+            return
+        }
+        guard let od = d["order"] as? [String:AnyObject] else {
+            print("no order in executionsResponse")
+            return
+        }
+        do {
+            let response = try OrderResponse(dictionary: od)
+            callback(response)
+        } catch let err {
+            print("error on websocket queue: \(err)")
         }
     }
 }

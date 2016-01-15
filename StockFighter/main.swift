@@ -30,18 +30,22 @@ do {
 
     var sharesToBuy = 100_000
     
-    let ws = venue.tickerTapeForStock(STOCK) { quote in
+    let executionsWs = venue.executionsForStock(STOCK) { order in
+        print(order)
+    }
+    
+    let tapeWs = venue.tickerTapeForStock(STOCK) { quote in
         do {
             guard let askBestPrice = quote.askBestPrice else { return }
             
             print("sharesToBuy=\(sharesToBuy): ordering \(quote.askSize) shares at price \(askBestPrice)")
             
             let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
-            if response.open { // didn't go filled. We could sit and wait but we have no patience
-                print("cancelling order as it was unfilled")
-                try venue.cancelOrderForStock(response.symbol, id: response.id)
-                return
-            }
+//            if response.open { // didn't go filled. We could sit and wait but we have no patience
+//                print("cancelling order as it was unfilled")
+//                try venue.cancelOrderForStock(response.symbol, id: response.id)
+//                return
+//            }
             
             // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
             let filled = response.fills.reduce(0) { (m, fill) in m + fill.qty }
@@ -57,7 +61,8 @@ do {
     print("press enter to quit")
     let _  = readLine()
     
-    ws.close()
+    tapeWs.close()
+    executionsWs.close()
     
 } catch let err {
     print("Err:", err)
