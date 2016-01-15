@@ -8,12 +8,18 @@
 
 import Foundation
 
-let ACCOUNT = "BOB84656349"
-let VENUE = "IVYAEX"
-let STOCK = "AREI"
+let ACCOUNT = "SLB4236322"
+let VENUE = "UZNEX"
+let STOCK = "UAXI"
 
 let queue = dispatch_queue_create("trading_engine", nil)
 let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key", account:ACCOUNT, queue: queue)
+
+struct OutstandingOrder {
+    let price:Int
+    let qty:Int
+    let direction:OrderDirection
+}
 
 let venue = client.venue(VENUE)
 do {
@@ -31,28 +37,35 @@ do {
 
     var sharesToBuy = 100_000
     
+    // only tracks our outstanding orders for the one stock. Assume in harder levels we'll have to trade multiple stocks concurrently
+    var outstandingOrders = [Int:OutstandingOrder]()
+    
     let executionsWs = venue.executionsForStock(STOCK) { order in
-        print(order)
+        guard let oo = outstandingOrders[order.id] else { return } // activity from someone else; not tracking this yet
+        outstandingOrders[order.id] = nil
+        
+        // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
+        let filled = order.fills.reduce(0) { (m, fill) in m + fill.qty }
+        sharesToBuy -= filled
+        print("\(filled) in \(order.fills.count) fills, \(sharesToBuy) remaining")
     }
     
     let tapeWs = venue.tickerTapeForStock(STOCK) { quote in
         do {
             guard let askBestPrice = quote.askBestPrice else { return }
             
+            if outstandingOrders.count > 0 { // don't place more than one concurrent order
+                return
+            }
+            
             print("sharesToBuy=\(sharesToBuy): ordering \(quote.askSize) shares at price \(askBestPrice)")
             
             let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
-//            if response.open { // didn't go filled. We could sit and wait but we have no patience
-//                print("cancelling order as it was unfilled")
-//                try venue.cancelOrderForStock(response.symbol, id: response.id)
-//                return
-//            }
+            outstandingOrders[response.id] = OutstandingOrder(
+                price: response.price,
+                qty:response.originalQty,
+                direction:response.direction)
             
-            // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
-            let filled = response.fills.reduce(0) { (m, fill) in m + fill.qty }
-            sharesToBuy -= filled
-            
-            print("\(filled) in \(response.fills.count) fills, \(sharesToBuy) remaining")
         } catch let err {
             print("ouch: \(err)")
         }
