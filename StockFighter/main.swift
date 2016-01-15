@@ -12,7 +12,8 @@ let ACCOUNT = "BOB84656349"
 let VENUE = "IVYAEX"
 let STOCK = "AREI"
 
-let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key", account:ACCOUNT)
+let queue = dispatch_queue_create("trading_engine", nil)
+let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key", account:ACCOUNT, queue: queue)
 
 let venue = client.venue(VENUE)
 do {

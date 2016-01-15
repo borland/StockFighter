@@ -14,18 +14,17 @@ enum HttpErrors : ErrorType {
 }
 
 class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
-    private let _queue = dispatch_queue_create("httpClientQueue", nil)
     private let _baseUrl:NSURL
     private let _apiKey:String
     
     // NSURLSession is inherently asynchronous; use NSCondition to block the calling thread
-    private var _syncData = [Int:(NSCondition, NSData?, NSError?)]()     // acquire _queue to access
+    private var _syncData = [Int:(NSCondition, NSData?, NSError?)]()     // acquire uqueue to access
     
     lazy private var _session:NSURLSession = {
         let sessionConfig = NSURLSessionConfiguration.defaultSessionConfiguration()
         sessionConfig.HTTPAdditionalHeaders = ["X-Starfighter-Authorization": self._apiKey]
-        let nsQueue = NSOperationQueue()
-        nsQueue.underlyingQueue = self._queue
+        let nsQueue = NSOperationQueue() // new queue, this is internal and unseen as our functions are all blocking at this point anyway
+        
         return NSURLSession(configuration: sessionConfig, delegate: self, delegateQueue: nsQueue)
         // we must invalidate the session at some point or we leak
     }()
@@ -67,16 +66,19 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
         
         let condition = NSCondition()
         condition.lock()
-        dispatch_sync(_queue) {
+
+        locked {
             self._syncData[task.taskIdentifier] = (condition, nil, nil)
         }
+        
         task.resume()
         condition.wait()
         condition.unlock()
         
         var returnedError:NSError?
         var returnedData:NSData?
-        dispatch_sync(_queue) {
+        
+        locked {
             guard let (_, data, err) = self._syncData[task.taskIdentifier] else {
                 fatalError("Can't get thing for taskId \(task.taskIdentifier)")
             }
@@ -101,25 +103,35 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
     }
     
     func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
-        // we'll be on _queue so accessing _conditions is safe
-        guard let (condition, oldData, error) = _syncData[dataTask.taskIdentifier] else {
-            fatalError("no NSCondition for task with id \(dataTask.taskIdentifier)")
+        locked {
+            guard let (condition, oldData, error) = self._syncData[dataTask.taskIdentifier] else {
+                fatalError("no NSCondition for task with id \(dataTask.taskIdentifier)")
+            }
+            
+            assert(oldData == nil, "Cannot assign data twice for response, I haven't written that code")
+
+            self._syncData[dataTask.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
         }
-        
-        assert(oldData == nil, "Cannot assign data twice for response, I haven't written that code")
-        _syncData[dataTask.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
     }
     
     func URLSession(session: NSURLSession, task: NSURLSessionTask, didCompleteWithError error: NSError?) {
-        // we'll be on _queue so accessing _conditions is safe
-        guard let (condition, data, _) = _syncData[task.taskIdentifier] else {
-            fatalError("no NSCondition for task with id \(task.taskIdentifier)")
+        locked {
+            guard let (condition, data, _) = self._syncData[task.taskIdentifier] else {
+                fatalError("no NSCondition for task with id \(task.taskIdentifier)")
+            }
+        
+            self._syncData[task.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
+            
+            condition.lock()
+            condition.signal()
+            condition.unlock()
         }
+    }
+    
+    private func locked(block:() throws -> Void) rethrows {
+        objc_sync_enter(self)
+        defer{ objc_sync_exit(self) }
         
-        _syncData[task.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
-        
-        condition.lock()
-        condition.signal()
-        condition.unlock()
+        try block()
     }
 }

@@ -29,20 +29,22 @@ enum ClientErrors : ErrorType {
 class ApiClient {
     private let _httpClient:HttpClient
     let account:String
+    let queue:dispatch_queue_t
     
-    convenience init(keyFile:String, account:String) throws {
+    convenience init(keyFile:String, account:String, queue:dispatch_queue_t) throws {
         guard let keyData = NSFileManager.defaultManager().contentsAtPath(keyFile) else {
             throw ClientErrors.CantReadKeyFile
         }
         guard let key = NSString(data: keyData, encoding: NSUTF8StringEncoding) as? String else {
             throw ClientErrors.KeyFileInvalidFormat
         }
-        self.init(apiKey: key, account: account)
+        self.init(apiKey: key, account: account, queue: queue)
     }
     
-    init(apiKey:String, account:String) {
+    init(apiKey:String, account:String, queue:dispatch_queue_t) {
         _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api/", apiKey:apiKey)
         self.account = account
+        self.queue = queue
     }
     
     struct HeartbeatResponse {
@@ -260,13 +262,15 @@ class Venue {
     
     // returns a websocketClient. It's up to the caller to close the client when done
     func tickerTapeWithCallback(callback:(QuoteResponse) -> Void) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"){ obj in
+        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"
+        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
     
     func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> Void) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"){ obj in
+        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"
+        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
@@ -290,13 +294,15 @@ class Venue {
     }
     
     func executionsWithCallback(callback:(OrderResponse) -> Void) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions"){ obj in
+        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions"
+        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }
     
     func executionsForStock(symbol:String, callback:(OrderResponse) -> Void) -> WebSocketClient {
-        return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stock/\(symbol)"){ obj in
+        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stock/\(symbol)"
+        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }
