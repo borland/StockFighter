@@ -192,7 +192,7 @@ class Venue {
         let quoteTimeStamp:NSDate // ts we last updated quote at (server-side)
         
         init(dictionary d:[String:AnyObject]) throws {
-            ok = d["ok"] as! Bool
+            ok = d["ok"] as? Bool ?? true // if we come in via a websocket then OK is missing but it exists in the outer response
             venue = d["venue"] as! String
             symbol =  d["symbol"] as! String
             bidBestPrice = d["bid"] as? Int // may not be present in the response
@@ -258,28 +258,34 @@ class Venue {
         return try OrderResponse(dictionary: d as! [String:AnyObject])
     }
     
+    private func processTickerTapeResponse(obj:AnyObject, callback:(QuoteResponse) -> ()) {
+        guard let d = obj as? [String:AnyObject] else { return }
+        guard let ok = d["ok"] as? Bool where ok ==  true else {
+            print("websocket callback missing ok:true")
+            return
+        }
+        guard let qd = d["quote"] as? [String:AnyObject] else {
+            print("no quote?")
+            return
+        }
+        do {
+            let response = try QuoteResponse(dictionary: qd)
+            callback(response)
+        } catch let err {
+            print("error on websocket queue: \(err)")
+        }
+    }
+    
     // returns a websocketClient. It's up to the caller to close the client when done
     func tickerTapeWithCallback(callback:(QuoteResponse) -> ()) -> WebSocketClient {
         return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"){ obj in
-            guard let d = obj as? [String:AnyObject] else { return }
-            do {
-                let response = try QuoteResponse(dictionary: d)
-                callback(response)
-            } catch let err {
-                print("error on websocket queue: \(err)")
-            }
+            self.processTickerTapeResponse(obj, callback: callback)
         }
     }
     
     func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> ()) -> WebSocketClient {
         return WebSocketClient(absoluteUrlString: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"){ obj in
-            guard let d = obj as? [String:AnyObject] else { return }
-            do {
-                let response = try QuoteResponse(dictionary: d)
-                callback(response)
-            } catch let err {
-                print("error on websocket queue: \(err)")
-            }
+            self.processTickerTapeResponse(obj, callback: callback)
         }
     }
 }

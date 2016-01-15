@@ -26,6 +26,7 @@ class WebSocketClient : NSObject, SRWebSocketDelegate {
         
         _webSocket.setDelegateDispatchQueue(_queue)
         _webSocket.delegate = self
+        _webSocket.open()
     }
     
     deinit {

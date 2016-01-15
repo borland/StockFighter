@@ -8,9 +8,9 @@
 
 import Foundation
 
-let ACCOUNT = "DSS52149520"
-let VENUE = "ETJJEX"
-let STOCK = "CIL"
+let ACCOUNT = "BOB84656349"
+let VENUE = "IVYAEX"
+let STOCK = "AREI"
 
 let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key", account:ACCOUNT)
 
@@ -31,22 +31,26 @@ do {
     var sharesToBuy = 100_000
     
     let ws = venue.tickerTapeForStock(STOCK) { quote in
-
-        guard let askBestPrice = quote.askBestPrice else { return }
-        
-        print("ordering \(quote.askSize) shares at price \(askBestPrice)")
-        
-        let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
-        if response.open { // didn't go filled. We could sit and wait but we have no patience
-            try venue.cancelOrderForStock(response.symbol, id: response.id)
-            return
+        do {
+            guard let askBestPrice = quote.askBestPrice else { return }
+            
+            print("sharesToBuy=\(sharesToBuy): ordering \(quote.askSize) shares at price \(askBestPrice)")
+            
+            let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
+            if response.open { // didn't go filled. We could sit and wait but we have no patience
+                print("cancelling order as it was unfilled")
+                try venue.cancelOrderForStock(response.symbol, id: response.id)
+                return
+            }
+            
+            // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
+            let filled = response.fills.reduce(0) { (m, fill) in m + fill.qty }
+            sharesToBuy -= filled
+            
+            print("\(filled) in \(response.fills.count) fills, \(sharesToBuy) remaining")
+        } catch let err {
+            print("ouch: \(err)")
         }
-        
-        // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
-        let filled = response.fills.reduce(0) { (m, fill) in m + fill.qty }
-        sharesToBuy -= filled
-        
-        print("\(filled) in \(response.fills.count) fills, \(sharesToBuy) remaining")
     }
     
     // keep the program running so async websocket doesn't terminate
