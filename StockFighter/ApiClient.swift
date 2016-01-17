@@ -301,7 +301,7 @@ class Venue {
     }
     
     func executionsForStock(symbol:String, callback:(OrderResponse) -> Void) -> WebSocketClient {
-        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stock/\(symbol)"
+        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stocks/\(symbol)"
         return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }

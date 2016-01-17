@@ -8,9 +8,10 @@
 
 import Foundation
 
-let ACCOUNT = "SLB4236322"
-let VENUE = "UZNEX"
-let STOCK = "UAXI"
+let ACCOUNT = "BP70276217"
+let VENUE = "CSMCEX"
+let STOCK = "FDI"
+let DONT_EXCEED_PRICE = 7869
 
 let queue = dispatch_queue_create("trading_engine", nil)
 let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key", account:ACCOUNT, queue: queue)
@@ -42,10 +43,15 @@ do {
     
     let executionsWs = venue.executionsForStock(STOCK) { order in
         guard let oo = outstandingOrders[order.id] else { return } // activity from someone else; not tracking this yet
-        outstandingOrders[order.id] = nil
-        
-        // else the response must have been filled. see how many shares we got (in theory with a limit order we should get the exact amount)
         let filled = order.fills.reduce(0) { (m, fill) in m + fill.qty }
+        
+        if order.open { // update on an unfilled order means we would buy those shares when it fills, but we haven't yet
+            print("partial fill \(filled), waiting...")
+            return
+        }
+        
+        outstandingOrders[order.id] = nil
+
         sharesToBuy -= filled
         print("\(filled) in \(order.fills.count) fills, \(sharesToBuy) remaining")
     }
@@ -54,13 +60,16 @@ do {
         do {
             guard let askBestPrice = quote.askBestPrice else { return }
             
+            let buySize = min(quote.askDepth, 1000)
+            let buyPrice = min(askBestPrice, DONT_EXCEED_PRICE)
+            
             if outstandingOrders.count > 0 { // don't place more than one concurrent order
                 return
             }
             
-            print("sharesToBuy=\(sharesToBuy): ordering \(quote.askSize) shares at price \(askBestPrice)")
+            print("sharesToBuy=\(sharesToBuy): ordering \(buySize) shares at price \(buyPrice)")
             
-            let response = try venue.placeOrderForStock(STOCK, price: askBestPrice, qty: quote.askSize, direction: .Buy)
+            let response = try venue.placeOrderForStock(STOCK, price: buyPrice, qty: buySize, direction: .Buy)
             outstandingOrders[response.id] = OutstandingOrder(
                 price: response.price,
                 qty:response.originalQty,
@@ -72,11 +81,16 @@ do {
     }
     
     // keep the program running so async websocket doesn't terminate
-    print("press enter to quit")
+    print("press enter to stop")
     let _  = readLine()
     
     tapeWs.close()
     executionsWs.close()
+    
+    for (id, order) in outstandingOrders {
+        print("canceling unfilled order \(id)")
+        try venue.cancelOrderForStock(STOCK, id: id)
+    }
     
 } catch let err {
     print("Err:", err)
