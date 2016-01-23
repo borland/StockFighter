@@ -28,22 +28,20 @@ enum ClientErrors : ErrorType {
 // do I want to use async I/O? Probably, but not yet
 class ApiClient {
     private let _httpClient:HttpClient
-    let account:String
     let queue:dispatch_queue_t
     
-    convenience init(keyFile:String, account:String, queue:dispatch_queue_t) throws {
+    convenience init(keyFile:String, queue:dispatch_queue_t) throws {
         guard let keyData = NSFileManager.defaultManager().contentsAtPath(keyFile) else {
             throw ClientErrors.CantReadKeyFile
         }
         guard let key = NSString(data: keyData, encoding: NSUTF8StringEncoding) as? String else {
             throw ClientErrors.KeyFileInvalidFormat
         }
-        self.init(apiKey: key, account: account, queue: queue)
+        self.init(apiKey: key, queue: queue)
     }
     
-    init(apiKey:String, account:String, queue:dispatch_queue_t) {
+    init(apiKey:String, queue:dispatch_queue_t) {
         _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api/", apiKey:apiKey)
-        self.account = account
         self.queue = queue
     }
     
@@ -64,8 +62,8 @@ class ApiClient {
         }
     }
     
-    func venue(name:String) -> Venue {
-        return Venue(httpClient: _httpClient, account:account, name: name)
+    func venue(account account:String, name:String) -> Venue {
+        return Venue(httpClient: _httpClient, queue: queue, account:account, name: name)
     }
 }
 
@@ -211,11 +209,13 @@ class Venue {
     }
     
     private let _httpClient:HttpClient
+    private let _queue:dispatch_queue_t
     let account:String
     let name:String
     
-    init(httpClient:HttpClient, account:String, name:String) {
+    init(httpClient:HttpClient, queue:dispatch_queue_t, account:String, name:String) {
         _httpClient = httpClient
+        _queue = queue
         self.account = account
         self.name = name
     }
@@ -262,15 +262,15 @@ class Venue {
     
     // returns a websocketClient. It's up to the caller to close the client when done
     func tickerTapeWithCallback(callback:(QuoteResponse) -> Void) -> WebSocketClient {
-        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape"
-        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
+        let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape")!
+        return WebSocketClient(url: url, queue: _queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
     
     func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> Void) -> WebSocketClient {
-        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)"
-        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
+        let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)")!
+        return WebSocketClient(url: url, queue: _queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
@@ -294,15 +294,15 @@ class Venue {
     }
     
     func executionsWithCallback(callback:(OrderResponse) -> Void) -> WebSocketClient {
-        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions"
-        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
+        let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions")!
+        return WebSocketClient(url: url, queue: _queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }
     
     func executionsForStock(symbol:String, callback:(OrderResponse) -> Void) -> WebSocketClient {
-        let url = "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stocks/\(symbol)"
-        return WebSocketClient(absoluteUrlString: url, queue: queue){ obj in
+        let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stocks/\(symbol)")!
+        return WebSocketClient(url: url, queue: _queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }

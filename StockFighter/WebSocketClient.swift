@@ -15,8 +15,7 @@ class WebSocketClient : NSObject, SRWebSocketDelegate {
     private let _webSocket:SRWebSocket
     private let _callback:(AnyObject) -> ()
     
-    init(absoluteUrlString:String, queue:dispatch_queue_t, onMessageCallback callback:(AnyObject) -> ()) {
-        guard let url = NSURL(string: absoluteUrlString) else { fatalError("invalid absoluteUrlString \(absoluteUrlString)") }
+    init(url:NSURL, queue:dispatch_queue_t, onMessageCallback callback:(AnyObject) -> ()) {
         _url = url
         _queue = queue
         
