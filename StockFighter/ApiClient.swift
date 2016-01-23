@@ -28,21 +28,19 @@ enum ClientErrors : ErrorType {
 // do I want to use async I/O? Probably, but not yet
 class ApiClient {
     private let _httpClient:HttpClient
-    let queue:dispatch_queue_t
     
-    convenience init(keyFile:String, queue:dispatch_queue_t) throws {
+    convenience init(keyFile:String) throws {
         guard let keyData = NSFileManager.defaultManager().contentsAtPath(keyFile) else {
             throw ClientErrors.CantReadKeyFile
         }
         guard let key = NSString(data: keyData, encoding: NSUTF8StringEncoding) as? String else {
             throw ClientErrors.KeyFileInvalidFormat
         }
-        self.init(apiKey: key, queue: queue)
+        self.init(apiKey: key)
     }
     
-    init(apiKey:String, queue:dispatch_queue_t) {
+    init(apiKey:String) {
         _httpClient = HttpClient(baseUrlString:"https://api.stockfighter.io/ob/api/", apiKey:apiKey)
-        self.queue = queue
     }
     
     struct HeartbeatResponse {
@@ -63,7 +61,7 @@ class ApiClient {
     }
     
     func venue(account account:String, name:String) -> Venue {
-        return Venue(httpClient: _httpClient, queue: queue, account:account, name: name)
+        return Venue(httpClient: _httpClient, account:account, name: name)
     }
 }
 
@@ -209,13 +207,11 @@ class Venue {
     }
     
     private let _httpClient:HttpClient
-    private let _queue:dispatch_queue_t
     let account:String
     let name:String
     
-    init(httpClient:HttpClient, queue:dispatch_queue_t, account:String, name:String) {
+    init(httpClient:HttpClient, account:String, name:String) {
         _httpClient = httpClient
-        _queue = queue
         self.account = account
         self.name = name
     }
@@ -261,16 +257,16 @@ class Venue {
     }
     
     // returns a websocketClient. It's up to the caller to close the client when done
-    func tickerTapeWithCallback(callback:(QuoteResponse) -> Void) -> WebSocketClient {
+    func tickerTape(queue queue:dispatch_queue_t, callback:(QuoteResponse) -> Void) -> WebSocketClient {
         let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape")!
-        return WebSocketClient(url: url, queue: _queue){ obj in
+        return WebSocketClient(url: url, queue: queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
     
-    func tickerTapeForStock(symbol:String, callback:(QuoteResponse) -> Void) -> WebSocketClient {
+    func tickerTapeForStock(symbol:String, queue:dispatch_queue_t, callback:(QuoteResponse) -> Void) -> WebSocketClient {
         let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/tickertape/stocks/\(symbol)")!
-        return WebSocketClient(url: url, queue: _queue){ obj in
+        return WebSocketClient(url: url, queue: queue){ obj in
             self.processTickerTapeResponse(obj, callback: callback)
         }
     }
@@ -293,16 +289,16 @@ class Venue {
         }
     }
     
-    func executionsWithCallback(callback:(OrderResponse) -> Void) -> WebSocketClient {
+    func executions(queue queue:dispatch_queue_t, callback:(OrderResponse) -> Void) -> WebSocketClient {
         let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions")!
-        return WebSocketClient(url: url, queue: _queue){ obj in
+        return WebSocketClient(url: url, queue: queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }
     
-    func executionsForStock(symbol:String, callback:(OrderResponse) -> Void) -> WebSocketClient {
+    func executionsForStock(symbol:String, queue:dispatch_queue_t, callback:(OrderResponse) -> Void) -> WebSocketClient {
         let url = NSURL(string: "wss://api.stockfighter.io/ob/api/ws/\(account)/venues/\(name)/executions/stocks/\(symbol)")!
-        return WebSocketClient(url: url, queue: _queue){ obj in
+        return WebSocketClient(url: url, queue: queue){ obj in
             self.processExecutionsResponse(obj, callback: callback)
         }
     }
