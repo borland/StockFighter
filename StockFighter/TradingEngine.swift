@@ -54,41 +54,54 @@ class TradingEngine {
     
     init(apiClient:ApiClient, account:String, venue:String) {
         queue = dispatch_queue_create("TradingEngine\(venue)", nil)
-        self._apiClient = apiClient
-        self._venue = _apiClient.venue(account: account, name: venue)
+        _apiClient = apiClient
+        _venue = _apiClient.venue(account: account, name: venue)
     }
     
-    /*! Shuts down the trading engine, closing all websockets and cancelling any outstanding unfilled orders.
+    /** Shuts down the trading engine, closing all websockets and cancelling any outstanding unfilled orders.
     You must call this method or you'll memory leak the websockets and callbacks */
     func close() {
-        dispatch_sync(queue) {
-            for (id, order) in self._orders {
+        var socketsToClose:[WebSocketClient] = []
+        
+        lock(self) {
+            for (id, order) in _orders {
                 do {
-                    try self._venue.cancelOrderForStock(order.symbol, id: id)
+                    try _venue.cancelOrderForStock(order.symbol, id: id)
                 } catch {
                     print("Shutdown: failed to cancel an order for \(order.symbol)") // we're shutting down, other than logging not much to do
                 }
             }
             
-            for socketClient in self._executionWebsockets.values { socketClient.close() }
-            self._executionWebsockets = [:]
-
-            for socketClient in self._tapeWebsockets.values { socketClient.close() }
-            self._tapeWebsockets = [:]
+            socketsToClose.appendContentsOf(_executionWebsockets.values)
+            socketsToClose.appendContentsOf(_tapeWebsockets.values)
+            _executionWebsockets = [:]
+            _tapeWebsockets = [:]
         }
+        
+        for socketClient in socketsToClose { socketClient.close() }
     }
     
+    /** Establishes a WebSocket connection to track executions for the given stock, and calls your callback
+     whenever new execution info arrives from the server.
+     
+     Once the engine is tracking orders for a stock, it will automatically remove it from the internal list of
+     outstanding orders when it becomes filled or cancelled
+     
+     - Parameter symbol: The stock symbol
+     - Parameter callback: Your callback */
     func trackOrdersForStock(symbol:String, callback:(Venue.OrderResponse) -> Void) {
-        dispatch_sync(queue) {
-            if self._executionWebsockets[symbol] != nil {
+        lock(self) {
+            if _executionWebsockets[symbol] != nil {
                 fatalError("tracking the same symbol twice!") // will have to change if we want to track across venue
             }
             
-            self._executionWebsockets[symbol] = self._venue.executionsForStock(symbol, queue: self.queue) { order in
-                guard let _ = self._orders[order.id] else { return } // activity from someone else; not tracking this yet
+            _executionWebsockets[symbol] = _venue.executionsForStock(symbol, queue: queue) { order in
+                lock(self) {
+                    guard let _ = self._orders[order.id] else { return } // activity from someone else; not tracking this yet
 
-                if !order.open {
-                    self._orders[order.id] = nil // it's no longer an outstanding order
+                    if !order.open {
+                        self._orders[order.id] = nil // it's no longer an outstanding order
+                    }
                 }
                 
                 callback(order)
@@ -96,22 +109,30 @@ class TradingEngine {
         }
     }
     
+    /** Establishes a WebSocket connection to track quotes for the given stock, and calls your callback
+     whenever a new quote info arrives from the server.
+     
+     Once the engine is tracking quotes for a stock, it will automatically store the last quote in the engine
+     
+     - Parameter symbol: The stock symbol
+     - Parameter callback: Your callback */
     func trackQuotesForStock(symbol:String, callback:(Venue.QuoteResponse) -> Void) {
-        dispatch_sync(queue) {
-            if self._tapeWebsockets[symbol] != nil {
+        lock(self) {
+            if _tapeWebsockets[symbol] != nil {
                 fatalError("tracking the same symbol tickerTape twice!") // will have to change if we want to track across venue
             }
         
-            self._tapeWebsockets[symbol] = self._venue.tickerTapeForStock(symbol, queue: self.queue, callback: callback)
+            _tapeWebsockets[symbol] = _venue.tickerTapeForStock(symbol, queue: queue, callback: callback)
         }
     }
     
+    /** Gets the outstanding orders you have placed for a given stock.
+     - Parameter symbol: The stock symbol
+     - Returns: Array of outstanding orders */
     func outstandingOrdersForStock(symbol:String) -> [OutstandingOrder] {
-        var result = [OutstandingOrder]()
-        dispatch_sync(queue) {
-            result = self._orders.values.filter{ o in o.symbol == symbol }
+        return lock(self) {
+            _orders.values.filter{ o in o.symbol == symbol }
         }
-        return result
     }
     
     func buyStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) throws {
@@ -126,8 +147,8 @@ class TradingEngine {
         if timeout != nil { fatalError("timeouts not implemented yet") }
         
         let response = try _venue.placeOrderForStock(symbol, price: price, qty: qty, direction: direction)
-        dispatch_sync(queue) {
-            self._orders[response.id] = OutstandingOrder(
+        lock(self) {
+            _orders[response.id] = OutstandingOrder(
                 symbol: response.symbol,
                 price: response.price,
                 qty:response.originalQty,

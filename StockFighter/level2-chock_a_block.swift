@@ -10,9 +10,9 @@ import Foundation
 
 func chock_a_block() {
 
-    let ACCOUNT = "BM54469729"
-    let VENUE = "VYICEX"
-    let STOCK = "MAH"
+    let ACCOUNT = "FDE65484149"
+    let VENUE = "FUNCEX"
+    let STOCK = "DBMI"
     let DONT_EXCEED_PRICE = 99999 // TODO
 
     let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key")

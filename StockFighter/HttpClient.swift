@@ -67,8 +67,8 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
         let condition = NSCondition()
         condition.lock()
 
-        locked {
-            self._syncData[task.taskIdentifier] = (condition, nil, nil)
+        lock(self) {
+            _syncData[task.taskIdentifier] = (condition, nil, nil)
         }
         
         task.resume()
@@ -78,13 +78,13 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
         var returnedError:NSError?
         var returnedData:NSData?
         
-        locked {
-            guard let (_, data, err) = self._syncData[task.taskIdentifier] else {
+        lock(self) {
+            guard let (_, data, err) = _syncData[task.taskIdentifier] else {
                 fatalError("Can't get thing for taskId \(task.taskIdentifier)")
             }
             returnedData = data
             returnedError = err
-            self._syncData.removeValueForKey(task.taskIdentifier)
+            _syncData.removeValueForKey(task.taskIdentifier)
         }
         
         if let err = returnedError {
@@ -103,35 +103,28 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
     }
     
     func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
-        locked {
-            guard let (condition, oldData, error) = self._syncData[dataTask.taskIdentifier] else {
+        lock(self) {
+            guard let (condition, oldData, error) = _syncData[dataTask.taskIdentifier] else {
                 fatalError("no NSCondition for task with id \(dataTask.taskIdentifier)")
             }
             
             assert(oldData == nil, "Cannot assign data twice for response, I haven't written that code")
 
-            self._syncData[dataTask.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
+            _syncData[dataTask.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
         }
     }
     
     func URLSession(session: NSURLSession, task: NSURLSessionTask, didCompleteWithError error: NSError?) {
-        locked {
-            guard let (condition, data, _) = self._syncData[task.taskIdentifier] else {
+        lock(self) {
+            guard let (condition, data, _) = _syncData[task.taskIdentifier] else {
                 fatalError("no NSCondition for task with id \(task.taskIdentifier)")
             }
         
-            self._syncData[task.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
+            _syncData[task.taskIdentifier] = (condition, data, error) // propagate the error back to the caller
             
             condition.lock()
             condition.signal()
             condition.unlock()
         }
-    }
-    
-    private func locked(block:() throws -> Void) rethrows {
-        objc_sync_enter(self)
-        defer{ objc_sync_exit(self) }
-        
-        try block()
     }
 }

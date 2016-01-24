@@ -152,7 +152,7 @@ class Venue {
         let id:Int // guaranteed unique *on this venue*
         let account:String
         let timeStamp:NSDate // ISO-8601 timestamp for when we received order
-        let fills:[OrderFill] // may have zero or multiple fills.  Note this order presumably has a total of 80 shares worth
+        let fills:[OrderFill] // may have zero or multiple fills.
         let totalFilled:Int
         let open:Bool
         
@@ -251,6 +251,12 @@ class Venue {
         return try OrderResponse(dictionary: d as! [String:AnyObject])
     }
     
+    /** Submits a request to cancel an outstanding order you've placed for a stock
+    
+    - Parameter symbol: The stock symbol
+    - Parameter id: The order id (returned as part of the OrderResponse when you called placeOrderForStock
+    - Returns: an OrderResponse
+    - Throws: ClientErrors.CantParseDate */
     func cancelOrderForStock(symbol:String, id:Int) throws -> OrderResponse {
         let d = try _httpClient.delete("venues/\(name)/stocks/\(symbol)/orders/\(id)")
         return try OrderResponse(dictionary: d as! [String:AnyObject])
