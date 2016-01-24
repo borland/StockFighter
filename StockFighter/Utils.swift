@@ -1,9 +1,9 @@
 //
 //  Utils.swift
-//  StockFighter
 //
 //  Created by Orion Edwards on 25/01/16.
-//  Copyright © 2016 Orion Edwards. All rights reserved.
+//  Copyright © 2016 Orion Edwards. Licensed under the MIT License
+//  https://opensource.org/licenses/MIT
 //
 
 import Foundation

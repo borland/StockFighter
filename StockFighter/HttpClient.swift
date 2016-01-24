@@ -1,9 +1,9 @@
 //
 //  HttpClient.swift
-//  StockFighter
 //
 //  Created by Orion Edwards on 24/12/15.
-//  Copyright © 2015 Orion Edwards. All rights reserved.
+//  Copyright © 2016 Orion Edwards. Licensed under the MIT License
+//  https://opensource.org/licenses/MIT
 //
 
 import Foundation
@@ -13,32 +13,50 @@ enum HttpErrors : ErrorType {
     case UnexpectedStatusCode(Int)
 }
 
+/** Low level HTTP client used by StockFighterApiClient and StockFighterGmClient. You should probably use those instead */
 class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
     private let _baseUrl:NSURL
-    private let _apiKey:String
+    private let _httpHeaders:[String:String]
     
     // NSURLSession is inherently asynchronous; use NSCondition to block the calling thread
-    private var _syncData = [Int:(NSCondition, NSData?, NSError?)]()     // acquire uqueue to access
+    private var _syncData = [Int:(NSCondition, NSData?, NSError?)]()     // lock(self) to access
     
     lazy private var _session:NSURLSession = {
         let sessionConfig = NSURLSessionConfiguration.defaultSessionConfiguration()
-        sessionConfig.HTTPAdditionalHeaders = ["X-Starfighter-Authorization": self._apiKey]
+        sessionConfig.HTTPAdditionalHeaders = self._httpHeaders
         let nsQueue = NSOperationQueue() // new queue, this is internal and unseen as our functions are all blocking at this point anyway
         
         return NSURLSession(configuration: sessionConfig, delegate: self, delegateQueue: nsQueue)
         // we must invalidate the session at some point or we leak
     }()
     
-    init(baseUrlString:String, apiKey:String) {
+    /** Inits the HttpClient
+
+    - Parameter baseUrlString: The base URL which will be prepended to all other relative paths. Probably `"https://api.stockfighter.io/ob/api/"`
+    - Parameter httpHeaders: HTTP headers to set for each request. Probably `["X-Starfighter-Authorization": yourApiKey]` */
+    init(baseUrlString:String, httpHeaders:[String:String]) {
         guard let url = NSURL(string: baseUrlString) else { fatalError("invalid baseUrl \(baseUrlString)") }
         _baseUrl = url
-        _apiKey = apiKey
+        _httpHeaders = httpHeaders
     }
-    
+
+    /** Performs a synchronous HTTP GET request.
+     The response body will both be converted from JSON using `NSJSONSerialization`
+     
+     - Parameter path: The relative path of the URL to post to e.g. "venues/stocks/etc"
+     - Returns: The response from the server deserialized via `NSJSONSerialization.JSONObjectWithData`
+     - Throws: An NSError from JSON de/serialization or an error from `HttpErrors`  */
     func get(path:String) throws -> AnyObject  {
         return try sendRequest(NSURLRequest(URL: urlForPath(path)))
     }
     
+    /** Performs a synchronous HTTP POST request.
+    The request and response body will both be converted to/from JSON using `NSJSONSerialization`
+     
+    - Parameter path: The relative path of the URL to post to e.g. "venues/stocks/etc"
+    - Parameter body: Optional request body - usually `[String:AnyObject]`. If set, will pass into `NSJSONSerialization.dataWithJSONObject` to serialize it
+    - Returns: The response from the server deserialized via `NSJSONSerialization.JSONObjectWithData`
+    - Throws: An NSError from JSON de/serialization or an error from `HttpErrors` for invalid HTTP response code, etc */
     func post(path:String, body:AnyObject? = nil) throws -> AnyObject {
         let request = NSMutableURLRequest(URL: urlForPath(path))
         request.HTTPMethod = "POST"
@@ -48,6 +66,11 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
         return try sendRequest(request)
     }
     
+    /** Performs a synchronous HTTP DELETE request.
+     
+     - Parameter path: The relative path of the URL to post to e.g. "venues/stocks/etc"
+     - Returns: The response from the server deserialized via `NSJSONSerialization.JSONObjectWithData`
+     - Throws: An NSError from JSON de/serialization or an error from `HttpErrors`  */
     func delete(path:String) throws -> AnyObject {
         let request = NSMutableURLRequest(URL: urlForPath(path))
         request.HTTPMethod = "DELETE"
@@ -101,6 +124,8 @@ class HttpClient : NSObject, NSURLSessionDelegate, NSURLSessionDataDelegate {
         
         return try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
     }
+    
+    // - Mark: NSURLSessionDelegate
     
     func URLSession(session: NSURLSession, dataTask: NSURLSessionDataTask, didReceiveData data: NSData) {
         lock(self) {

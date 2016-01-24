@@ -41,7 +41,7 @@ class TradingEngine {
     
     let queue:dispatch_queue_t
     
-    private let _apiClient:ApiClient
+    private let _apiClient:StockFighterApiClient
     private let _venue:Venue
     
     // must dispatch onto queue to access any members
@@ -49,10 +49,10 @@ class TradingEngine {
     private var _tapeWebsockets:[String:WebSocketClient] = [:]
     
     private var _position:[String:Int] = [:] // key:Stock symbol, value:How many we have
-    private var _lastQuotes:[String:Venue.QuoteResponse] = [:] // key:Stock symbol
+    private var _lastQuotes:[String:QuoteResponse] = [:] // key:Stock symbol
     private var _orders:[Int:OutstandingOrder] = [:]
     
-    init(apiClient:ApiClient, account:String, venue:String) {
+    init(apiClient:StockFighterApiClient, account:String, venue:String) {
         queue = dispatch_queue_create("TradingEngine\(venue)", nil)
         _apiClient = apiClient
         _venue = _apiClient.venue(account: account, name: venue)
@@ -89,7 +89,7 @@ class TradingEngine {
      
      - Parameter symbol: The stock symbol
      - Parameter callback: Your callback */
-    func trackOrdersForStock(symbol:String, callback:(Venue.OrderResponse) -> Void) {
+    func trackOrdersForStock(symbol:String, callback:(OrderResponse) -> Void) {
         lock(self) {
             if _executionWebsockets[symbol] != nil {
                 fatalError("tracking the same symbol twice!") // will have to change if we want to track across venue
@@ -116,7 +116,7 @@ class TradingEngine {
      
      - Parameter symbol: The stock symbol
      - Parameter callback: Your callback */
-    func trackQuotesForStock(symbol:String, callback:(Venue.QuoteResponse) -> Void) {
+    func trackQuotesForStock(symbol:String, callback:(QuoteResponse) -> Void) {
         lock(self) {
             if _tapeWebsockets[symbol] != nil {
                 fatalError("tracking the same symbol tickerTape twice!") // will have to change if we want to track across venue

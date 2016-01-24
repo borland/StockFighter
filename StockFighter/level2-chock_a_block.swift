@@ -9,15 +9,34 @@
 import Foundation
 
 func chock_a_block() {
+    
+    let KEYFILE = "/Users/orione/Dev/StockFighter/StockFighter/persistent_key"
 
-    let ACCOUNT = "FDE65484149"
-    let VENUE = "FUNCEX"
-    let STOCK = "DBMI"
+    var tradingAccount = ""
+    var venueIdentifier = ""
+    var stockSymbol = ""
     let DONT_EXCEED_PRICE = 99999 // TODO
+    
+    // use the GM api to pick up account.etc
+    let gm = try! StockFighterGmClient(keyFile: KEYFILE)
+    do {
+        let info = try gm.startLevel("chock_a_block")
+        
+        tradingAccount = info.account
+        assert(info.venues.count == 1)
+        venueIdentifier = info.venues[0]
+        assert(info.tickers.count == 1)
+        stockSymbol = info.tickers[0]
+        
+        print("GM info: trading with account \(tradingAccount) on exchange \(venueIdentifier) for stock \(stockSymbol)")
+    } catch let err {
+        print("GM error \(err)")
+        return
+    }
+    
+    let client = try! StockFighterApiClient(keyFile: KEYFILE)
 
-    let client = try! ApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key")
-
-    let venue = client.venue(account:ACCOUNT, name:VENUE)
+    let venue = client.venue(account:tradingAccount, name:venueIdentifier)
     do {
         let hr = try venue.heartbeat()
         print("heartbeat: ", hr.ok, hr.venue);
@@ -30,8 +49,8 @@ func chock_a_block() {
         
         var sharesToBuy = 100_000
         
-        let engine = TradingEngine(apiClient: client, account: ACCOUNT, venue: VENUE)
-        engine.trackOrdersForStock(STOCK) { order in
+        let engine = TradingEngine(apiClient: client, account: tradingAccount, venue: venueIdentifier)
+        engine.trackOrdersForStock(stockSymbol) { order in
             if order.open { return } // only interested in filled orders
             
             let filled = order.fills.reduce(0) { (m, fill) in m + fill.qty }
@@ -40,20 +59,20 @@ func chock_a_block() {
             print("\(filled) in \(order.fills.count) fills, \(sharesToBuy) remaining")
         }
         
-        engine.trackQuotesForStock(STOCK) { quote in
+        engine.trackQuotesForStock(stockSymbol) { quote in
             do {
                 guard let askBestPrice = quote.askBestPrice else { return }
                 
                 let buySize = min(quote.askDepth, 1000)
                 let buyPrice = min(askBestPrice, DONT_EXCEED_PRICE)
                 
-                if engine.outstandingOrdersForStock(STOCK).count > 0 { // don't place more than one concurrent order
+                if engine.outstandingOrdersForStock(stockSymbol).count > 0 { // don't place more than one concurrent order
                     return
                 }
                 
                 print("sharesToBuy=\(sharesToBuy): ordering \(buySize) shares at price \(buyPrice)")
                 
-                try engine.buyStock(STOCK, price: buyPrice, qty: buySize)
+                try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize)
             } catch let err {
                 print("error buying shares \(err)")
             }

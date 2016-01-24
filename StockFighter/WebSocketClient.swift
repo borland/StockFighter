@@ -1,14 +1,16 @@
 //
 //  WebSocketClient.swift
-//  StockFighter
 //
 //  Created by Orion Edwards on 15/01/16.
-//  Copyright © 2016 Orion Edwards. All rights reserved.
+//  Copyright © 2016 Orion Edwards. Licensed under the MIT License
+//  https://opensource.org/licenses/MIT
 //
 
 import Foundation
 import SocketRocket
 
+/** Low level WebSocket client used by StockFighterApiClient. You should probably use that instead
+ Note: This is basically a thin wrapper over SocketRocket */
 class WebSocketClient : NSObject, SRWebSocketDelegate {
     private let _queue:dispatch_queue_t
     private let _url:NSURL
