@@ -9,4 +9,11 @@
 import Foundation
 
 // run the code for a given level
-chock_a_block()
+//chock_a_block()
+
+let client = try! StockFighterApiClient(keyFile: "/Users/orione/Dev/StockFighter/StockFighter/persistent_key")
+
+print(client.heartbeat())
+
+let testEx = client.venue(account: "TESTACCOUNT", name: "TESTEX")
+print(testEx.heartbeat())
