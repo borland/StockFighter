@@ -17,3 +17,17 @@ print(client.heartbeat())
 
 let testEx = client.venue(account: "TESTACCOUNT", name: "TESTEX")
 print(testEx.heartbeat())
+
+do {
+    let stocks = try testEx.stocks()
+    print(stocks)
+    
+    let orders = try testEx.orderBookForStock("FOOBAR")
+    print(orders)
+    
+    let quote = try testEx.quoteForStock("FOOBAR")
+    print(quote)
+    
+} catch let error {
+    print(error)
+}
