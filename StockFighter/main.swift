@@ -32,7 +32,7 @@ do {
     let order = try testExchange.placeOrderForStock("FOOBAR", price: 100, qty: 10, direction: .Buy)
     print(order)
     
-    let st = try testExchange.accountOrderStatus()
+    let st = try testExchange.accountOrderStatusForStock("FOOBAR")
     print(st)
     
     
