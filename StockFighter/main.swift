@@ -15,18 +15,21 @@ let client = try! StockFighterApiClient(keyFile: "/Users/orione/Dev/StockFighter
 
 print(client.heartbeat())
 
-let testEx = client.venue(account: "TESTACCOUNT", name: "TESTEX")
-print(testEx.heartbeat())
+let testExchange = client.venue(account: "EXB123456", name: "TESTEX")
+print(testExchange.heartbeat())
 
 do {
-    let stocks = try testEx.stocks()
+    let stocks = try testExchange.stocks()
     print(stocks)
     
-    let orders = try testEx.orderBookForStock("FOOBAR")
+    let orders = try testExchange.orderBookForStock("FOOBAR")
     print(orders)
     
-    let quote = try testEx.quoteForStock("FOOBAR")
+    let quote = try testExchange.quoteForStock("FOOBAR")
     print(quote)
+    
+    let order = try testExchange.placeOrderForStock("FOOBAR", price: 100, qty: 10, direction: .Buy)
+    print(order)
     
 } catch let error {
     print(error)
