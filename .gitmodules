@@ -1,0 +1,3 @@
+[submodule "StockFighterApiClient"]
+	path = StockFighterApiClient
+	url = https://github.com/borland/StockFighterApiClient.git
