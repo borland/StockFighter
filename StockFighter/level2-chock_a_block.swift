@@ -38,7 +38,7 @@ func chock_a_block() {
 
     let venue = client.venue(account:tradingAccount, name:venueIdentifier)
 
-    let hr = venue.heartbeat()
+    let hr = try! venue.heartbeat()
     print("heartbeat: ", hr.ok, hr.venue);
 
     // basic poor strategy: (basically being a market order)
