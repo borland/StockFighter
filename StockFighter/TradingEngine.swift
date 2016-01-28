@@ -33,6 +33,7 @@ engine.orderUpdated(callback) - tells the engine to call this callback when we g
 // Future TODO: tracking a stock across multiple venues? Would require a refactor
 class TradingEngine {
     struct OutstandingOrder {
+        let id:Int
         let symbol:String
         let price:Int
         let qty:Int
@@ -143,16 +144,38 @@ class TradingEngine {
         try placeOrder(.Sell, symbol, price, qty, timeout)
     }
     
+    func cancelOrder(order:OutstandingOrder) throws {
+        try _venue.cancelOrderForStock(order.symbol, id: order.id)
+        _orders[order.id] = nil
+        print("canceled order \(order.id) at price \(order.price)")
+        
+    }
+    
     private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) throws {
         if timeout != nil { fatalError("timeouts not implemented yet") }
         
         let response = try _venue.placeOrderForStock(symbol, price: price, qty: qty, direction: direction)
         lock(self) {
             _orders[response.id] = OutstandingOrder(
+                id:response.id,
                 symbol: response.symbol,
                 price: response.price,
                 qty:response.originalQty,
                 direction:response.direction)
         }
+    }
+}
+
+/** Helpers and things which don't directly need to be in the engine go here */
+extension TradingEngine {
+    func cancelOrders(orders:[OutstandingOrder]) throws -> [OutstandingOrder] {
+        for order in orders {
+            try cancelOrder(order)
+        }
+        return orders
+    }
+    
+    func cancelOrdersForStock(symbol:String, predicate:(OutstandingOrder) -> Bool) throws -> [OutstandingOrder] {
+        return try cancelOrders(outstandingOrdersForStock(symbol).filter(predicate)) // filter returns an array not a lazy sequence so this is ok
     }
 }

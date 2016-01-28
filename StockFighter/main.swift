@@ -8,5 +8,12 @@
 
 import Foundation
 
+
+let keyFile = "/Users/orione/Dev/StockFighter/StockFighter/persistent_key"
+
+let apiClient = try! StockFighterApiClient(keyFile: keyFile)
+let gm = try! StockFighterGmClient(keyFile: keyFile)
+
 // run the code for a given level
-chock_a_block()
+//first_steps(apiClient, gm)
+chock_a_block(apiClient, gm)

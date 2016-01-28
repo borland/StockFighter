@@ -8,24 +8,21 @@
 
 import Foundation
 
-func chock_a_block() {
+func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     
-    let KEYFILE = "/Users/orione/Dev/StockFighter/StockFighter/persistent_key"
-
     var tradingAccount = ""
     var venueIdentifier = ""
     var stockSymbol = ""
-    let DONT_EXCEED_PRICE = 99999 // TODO
+    let targetShares = 100_000 - 1196
+    let dontExceedPrice = 6385 // manually got from watching the blotter
     
     // use the GM api to pick up account.etc
-    let gm = try! StockFighterGmClient(keyFile: KEYFILE)
+
     do {
         let info = try gm.startLevel("chock_a_block")
         
         tradingAccount = info.account
-        assert(info.venues.count == 1)
         venueIdentifier = info.venues[0]
-        assert(info.tickers.count == 1)
         stockSymbol = info.tickers[0]
         
         print("GM info: trading with account \(tradingAccount) on exchange \(venueIdentifier) for stock \(stockSymbol)")
@@ -33,23 +30,24 @@ func chock_a_block() {
         print("GM error \(err)")
         return
     }
+
+    let venue = apiClient.venue(account:tradingAccount, name:venueIdentifier)
     
-    let client = try! StockFighterApiClient(keyFile: KEYFILE)
-
-    let venue = client.venue(account:tradingAccount, name:venueIdentifier)
-
-    let hr = try! venue.heartbeat()
-    print("heartbeat: ", hr.ok, hr.venue);
-
+    do {
+        try venue.heartbeat()
+    } catch let err {
+        fatalError("venue is down! \(err)")
+    }
+    
     // basic poor strategy: (basically being a market order)
     // quote, place a limit order at the askBestPrice for the askSize. Hopefully we will buy it
     // if the order comes back still open, cancel it and repeat the quote process again
     // if the order comes back closed, repeat the quote process again
     // stop when we've got all of our 100k shares
     
-    var sharesToBuy = 100_000
+    var sharesToBuy = targetShares
     
-    let engine = TradingEngine(apiClient: client, account: tradingAccount, venue: venueIdentifier)
+    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier)
     engine.trackOrdersForStock(stockSymbol) { order in
         if order.open { return } // only interested in filled orders
         
@@ -59,18 +57,37 @@ func chock_a_block() {
         print("\(filled) in \(order.fills.count) fills, \(sharesToBuy) remaining")
     }
     
+    let concurrentOrderLimit = 5
+    
     engine.trackQuotesForStock(stockSymbol) { quote in
         do {
             guard let askBestPrice = quote.askBestPrice else { return }
             
             let buySize = min(quote.askDepth, 1000)
-            let buyPrice = min(askBestPrice, DONT_EXCEED_PRICE)
+            let buyPrice = min(askBestPrice, dontExceedPrice)
             
-            if engine.outstandingOrdersForStock(stockSymbol).count > 0 { // don't place more than one concurrent order
+            if askBestPrice > dontExceedPrice {
+                print("quote at \(askBestPrice); ignoring as over dontExceedPrice of \(dontExceedPrice)")
                 return
             }
+
+            let ooCount = engine.outstandingOrdersForStock(stockSymbol).count
+            if ooCount >= concurrentOrderLimit { // don't place more than x concurrent orders
+                // if we have any outstanding orders greater than the quote, cancel it
+                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > askBestPrice }
+                
+                if (ooCount - canceledOrders.count) > concurrentOrderLimit {
+                    print("quote at \(askBestPrice); skipping - at max concurrent orders")
+                    return
+                }
+            }
             
-            print("sharesToBuy=\(sharesToBuy): ordering \(buySize) shares at price \(buyPrice)")
+            let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == askBestPrice }
+            if x.count > 0 {
+                print("quote at \(askBestPrice); skipping as I have orders at this price already")
+            }
+
+            print("quote at \(askBestPrice); ordering \(buySize) shares at price \(buyPrice) - \(sharesToBuy) goal in total")
             
             try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize)
         } catch let err {
