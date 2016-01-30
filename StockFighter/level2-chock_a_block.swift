@@ -13,8 +13,12 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     var tradingAccount = ""
     var venueIdentifier = ""
     var stockSymbol = ""
-    let targetShares = 100_000 - 1196
-    let dontExceedPrice = 6385 // manually got from watching the blotter
+    let targetShares = 100_000 - 0
+    let buyUnder = 1_00 // it looks like I'm getting a string of quotes for $x, but seeing orders fill for less than that in the blotter. Don't buy at the quoted price!
+    
+    let overBudgetPercent = 5.0 // we're willing to go x% over budget
+    let dontExceedPrice = Int( Double(27_33 + buyUnder) * (1.0 + overBudgetPercent)) // manually got from watching the blotter; tp is 27.33
+    let blockSize = 750 // place an order for at most X
     
     // use the GM api to pick up account.etc
 
@@ -35,14 +39,17 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     
     do {
         try venue.heartbeat()
+        
     } catch let err {
         fatalError("venue is down! \(err)")
     }
     
-    // basic poor strategy: (basically being a market order)
-    // quote, place a limit order at the askBestPrice for the askSize. Hopefully we will buy it
-    // if the order comes back still open, cancel it and repeat the quote process again
-    // if the order comes back closed, repeat the quote process again
+    // basic strategy: (basically being a market order)
+    // quote, place a limit order at the askBestPrice for min(500, askSize). Hopefully we will buy it
+    // wait for the order to fill. If we see a lower quote come in, cancel our existing order although this should never
+    // happen as in theory the market would sell us the stock instead
+    //
+    // If an order fills, don't place another one until the next trading day to (try) avoid a price impact
     // stop when we've got all of our 100k shares
     
     var sharesToBuy = targetShares
@@ -57,39 +64,59 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         print("\(filled) in \(order.fills.count) fills, \(sharesToBuy) remaining")
     }
     
-    let concurrentOrderLimit = 5
+    let concurrentOrderLimit = 1
+    var lastOrderTime:NSDate?
     
     engine.trackQuotesForStock(stockSymbol) { quote in
         do {
-            guard let askBestPrice = quote.askBestPrice else { return }
+            if engine.quoteHistory.count < 3 { return } // don't place orders until we've looked at the market a little bit
             
-            let buySize = min(quote.askDepth, 1000)
-            let buyPrice = min(askBestPrice, dontExceedPrice)
+            guard let askBestPrice = quote.askBestPrice else { return }
+//            print("quote at \(askBestPrice)")
             
             if askBestPrice > dontExceedPrice {
-                print("quote at \(askBestPrice); ignoring as over dontExceedPrice of \(dontExceedPrice)")
+                print("ignoring as over dontExceedPrice of \(dontExceedPrice)")
                 return
             }
+            
+            let targetPrice = askBestPrice - buyUnder
+            
+            let buySize = min(quote.askDepth, blockSize)
+            let buyPrice = min(targetPrice, dontExceedPrice)
+
 
             let ooCount = engine.outstandingOrdersForStock(stockSymbol).count
             if ooCount >= concurrentOrderLimit { // don't place more than x concurrent orders
+
                 // if we have any outstanding orders greater than the quote, cancel it
-                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > askBestPrice }
+                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > targetPrice }
                 
                 if (ooCount - canceledOrders.count) > concurrentOrderLimit {
-                    print("quote at \(askBestPrice); skipping - at max concurrent orders")
+//                    print("tp \(targetPrice); skipping - at max concurrent orders")
                     return
                 }
             }
             
-            let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == askBestPrice }
+            let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == targetPrice }
             if x.count > 0 {
-                print("quote at \(askBestPrice); skipping as I have orders at this price already")
+//                print("tp \(targetPrice); skipping as I have orders at this price already")
+                return
             }
-
+            
+            // we want to wait a little bit in between placing orders to avoid impacting the price
+            // the stockfighter "day" is about 5 seconds
+            if let lot = lastOrderTime where NSDate().timeIntervalSinceDate(lot) < 5 {
+                // print("tradingDay is \(status.tradingDay): quote at \(askBestPrice) - tp \(targetPrice); skipping as I already placed an order today")
+                return
+            }
+            
+            lastOrderTime = NSDate()
+            
             print("quote at \(askBestPrice); ordering \(buySize) shares at price \(buyPrice) - \(sharesToBuy) goal in total")
             
-            try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize)
+            try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize, timeout: 20)
+
+
         } catch let err {
             print("error buying shares \(err)")
         }

@@ -40,6 +40,8 @@ class TradingEngine {
         let direction:OrderDirection
     }
     
+    let historicalQuoteBufferSize = 20
+    
     let queue:dispatch_queue_t
     
     private let _apiClient:StockFighterApiClient
@@ -48,6 +50,7 @@ class TradingEngine {
     // must dispatch onto queue to access any members
     private var _executionWebsockets:[String:WebSocketClient] = [:]
     private var _tapeWebsockets:[String:WebSocketClient] = [:]
+    private var _quoteHistory:[QuoteResponse] = [] // we keep the last n quotes in memory
     
     private var _position:[String:Int] = [:] // key:Stock symbol, value:How many we have
     private var _lastQuotes:[String:QuoteResponse] = [:] // key:Stock symbol
@@ -123,9 +126,20 @@ class TradingEngine {
                 fatalError("tracking the same symbol tickerTape twice!") // will have to change if we want to track across venue
             }
         
-            _tapeWebsockets[symbol] = _venue.tickerTapeForStock(symbol, queue: queue, callback: callback)
+            _tapeWebsockets[symbol] = _venue.tickerTapeForStock(symbol, queue: queue) { [weak self] quote in
+                guard let this = self else { return }
+                lock(this) {
+                    this._quoteHistory.append(quote)
+                    if this._quoteHistory.count > this.historicalQuoteBufferSize {
+                        this._quoteHistory.removeFirst()
+                    }
+                    callback(quote)
+                }
+            }
         }
     }
+    
+    var quoteHistory:[QuoteResponse] { return _quoteHistory }
     
     /** Gets the outstanding orders you have placed for a given stock.
      - Parameter symbol: The stock symbol
@@ -145,23 +159,42 @@ class TradingEngine {
     }
     
     func cancelOrder(order:OutstandingOrder) throws {
-        try _venue.cancelOrderForStock(order.symbol, id: order.id)
-        _orders[order.id] = nil
-        print("canceled order \(order.id) at price \(order.price)")
+        try lock(self){
+            if let targetId = _orders[order.id]?.id {
+                try _venue.cancelOrderForStock(order.symbol, id: targetId)
+                _orders[targetId] = nil
+                print("canceled order \(targetId) at price \(order.price)")
+            }
+        }
         
     }
     
     private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) throws {
-        if timeout != nil { fatalError("timeouts not implemented yet") }
-        
         let response = try _venue.placeOrderForStock(symbol, price: price, qty: qty, direction: direction)
         lock(self) {
-            _orders[response.id] = OutstandingOrder(
+            let order = OutstandingOrder(
                 id:response.id,
                 symbol: response.symbol,
                 price: response.price,
                 qty:response.originalQty,
                 direction:response.direction)
+            
+            _orders[response.id] = order
+            
+            if let t = timeout {
+                let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(t * Double(NSEC_PER_SEC)))
+                dispatch_after(delayTime, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)) { [weak self] in
+                    guard let this = self else { return }
+                    lock(this) {
+                        if this._orders[order.id] != nil {
+                            print("order timed out!")
+                            do {
+                                try this.cancelOrder(order)
+                            } catch {} // timeout failed, can't do much
+                        }
+                    }
+                }
+            }
         }
     }
 }
