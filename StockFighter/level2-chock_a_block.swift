@@ -13,11 +13,11 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     var tradingAccount = ""
     var venueIdentifier = ""
     var stockSymbol = ""
-    let targetShares = 100_000 - 0
+    let targetShares = 100_000 - 14370
     let buyUnder = 1_00 // it looks like I'm getting a string of quotes for $x, but seeing orders fill for less than that in the blotter. Don't buy at the quoted price!
     
     let overBudgetPercent = 5.0 // we're willing to go x% over budget
-    let dontExceedPrice = Int( Double(27_33 + buyUnder) * (1.0 + overBudgetPercent)) // manually got from watching the blotter; tp is 27.33
+    let dontExceedPrice = Int( Double(63_13) * (1.0 + overBudgetPercent)) // manually got from watching the blotter; tp is 27.33
     let blockSize = 750 // place an order for at most X
     
     // use the GM api to pick up account.etc
@@ -33,6 +33,7 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     } catch let err {
         print("GM error \(err)")
         return
+        
     }
 
     let venue = apiClient.venue(account:tradingAccount, name:venueIdentifier)
@@ -89,7 +90,7 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
             if ooCount >= concurrentOrderLimit { // don't place more than x concurrent orders
 
                 // if we have any outstanding orders greater than the quote, cancel it
-                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > targetPrice }
+                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > (buyPrice + buyUnder + 5) } // don't cancel if close enough
                 
                 if (ooCount - canceledOrders.count) > concurrentOrderLimit {
 //                    print("tp \(targetPrice); skipping - at max concurrent orders")
