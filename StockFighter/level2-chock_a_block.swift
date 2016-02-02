@@ -45,13 +45,19 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         fatalError("venue is down! \(err)")
     }
     
-    // basic strategy: (basically being a market order)
-    // quote, place a limit order at the askBestPrice for min(500, askSize). Hopefully we will buy it
-    // wait for the order to fill. If we see a lower quote come in, cancel our existing order although this should never
-    // happen as in theory the market would sell us the stock instead
+    // on a quote, place a limit order at the askBestPrice minus offset (**) for min(750, askSize). Hopefully we will buy it.
+    // wait for the order to fill. If we see a lower quote come in, cancel our existing order.
+    // Don't place multiple orders on the same stock as that would lead to overpaying
     //
-    // If an order fills, don't place another one until the next trading day to (try) avoid a price impact
-    // stop when we've got all of our 100k shares
+    // If an order fills, don't place another one until the next trading day to (try) avoid a price impact.
+    //
+    // ** An interesting observation: It's quite common to see stocks trade for up to around $2 *less* than the
+    // prices that are arriving in quotes. If we place bids for a lower amount than the quotes, we end up buying
+    // shares for less money
+    //
+    // This doesn't really seem to work. If I buy shares more rapidly then I start to cause a price impact
+    // If I buy shares more slowly then I pick them up for a good price, but I can't buy enough shares
+    // before the level times out :-(
     
     var sharesToBuy = targetShares
     
