@@ -58,6 +58,7 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     // This doesn't really seem to work. If I buy shares more rapidly then I start to cause a price impact
     // If I buy shares more slowly then I pick them up for a good price, but I can't buy enough shares
     // before the level times out :-(
+    // In saying that, I still passed the level, but my score wasn't very high
     
     var sharesToBuy = targetShares
     
@@ -79,7 +80,6 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
             if engine.quoteHistory.count < 3 { return } // don't place orders until we've looked at the market a little bit
             
             guard let askBestPrice = quote.askBestPrice else { return }
-//            print("quote at \(askBestPrice)")
             
             if askBestPrice > dontExceedPrice {
                 print("ignoring as over dontExceedPrice of \(dontExceedPrice)")
@@ -99,30 +99,25 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
                 let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > (buyPrice + buyUnder + 5) } // don't cancel if close enough
                 
                 if (ooCount - canceledOrders.count) > concurrentOrderLimit {
-//                    print("tp \(targetPrice); skipping - at max concurrent orders")
                     return
                 }
             }
             
             let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == targetPrice }
             if x.count > 0 {
-//                print("tp \(targetPrice); skipping as I have orders at this price already")
                 return
             }
             
             // we want to wait a little bit in between placing orders to avoid impacting the price
             // the stockfighter "day" is about 5 seconds
             if let lot = lastOrderTime where NSDate().timeIntervalSinceDate(lot) < 5 {
-                // print("tradingDay is \(status.tradingDay): quote at \(askBestPrice) - tp \(targetPrice); skipping as I already placed an order today")
                 return
             }
-            
             lastOrderTime = NSDate()
             
             print("quote at \(askBestPrice); ordering \(buySize) shares at price \(buyPrice) - \(sharesToBuy) goal in total")
             
             try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize, timeout: 20)
-
 
         } catch let err {
             print("error buying shares \(err)")

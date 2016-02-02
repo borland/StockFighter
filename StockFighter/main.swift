@@ -16,4 +16,5 @@ let gm = try! StockFighterGmClient(keyFile: keyFile)
 
 // run the code for a given level
 //first_steps(apiClient, gm)
-chock_a_block(apiClient, gm)
+//chock_a_block(apiClient, gm)
+sell_side(apiClient, gm)
