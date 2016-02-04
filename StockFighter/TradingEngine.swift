@@ -125,6 +125,25 @@ class TradingEngine {
     var position:[String:Int] { return lock(self) { _position } }
     
     var netProfit:Int { return lock(self) { _income - _expenses } }
+
+    /** If there aren't count previous quotes for which selector doesn't return nil, return nil */
+    func mapReduceLastQuotes(count:Int, map:(QuoteResponse) -> Int?, reduce:([Int] -> Int)) -> Int? {
+        let qh = lock(self) { _quoteHistory } // swift arrays are by value
+        var selected = [Int]()
+        for var idx = qh.count - 1; idx > 0; --idx {
+            if let x = map(qh[idx]) {
+                selected.append(x) // reverses order by average doesn't care
+            }
+            if selected.count >= count {
+                break
+            }
+        }
+        
+        if selected.count < count { // we can't generate an average of the last n items because there aren't enough
+            return nil
+        }
+        return reduce(selected)
+    }
     
     /** Gets the number of shares we have in this stock, or 0 if we have none. We can have negative shares! */
     func positionForStock(symbol:String) -> Int {
