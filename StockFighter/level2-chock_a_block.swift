@@ -76,52 +76,49 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     var lastOrderTime:NSDate?
     
     engine.trackQuotesForStock(stockSymbol) { quote in
-        do {
-            if engine.quoteHistory.count < 3 { return } // don't place orders until we've looked at the market a little bit
-            
-            guard let askBestPrice = quote.askBestPrice else { return }
-            
-            if askBestPrice > dontExceedPrice {
-                print("ignoring as over dontExceedPrice of \(dontExceedPrice)")
-                return
-            }
-            
-            let targetPrice = askBestPrice - buyUnder
-            
-            let buySize = min(quote.askDepth, blockSize)
-            let buyPrice = min(targetPrice, dontExceedPrice)
-
-
-            let ooCount = engine.outstandingOrdersForStock(stockSymbol).count
-            if ooCount >= concurrentOrderLimit { // don't place more than x concurrent orders
-
-                // if we have any outstanding orders greater than the quote, cancel it
-                let canceledOrders = try engine.cancelOrdersForStock(stockSymbol) { o in o.price > (buyPrice + buyUnder + 5) } // don't cancel if close enough
-                
-                if (ooCount - canceledOrders.count) > concurrentOrderLimit {
-                    return
-                }
-            }
-            
-            let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == targetPrice }
-            if x.count > 0 {
-                return
-            }
-            
-            // we want to wait a little bit in between placing orders to avoid impacting the price
-            // the stockfighter "day" is about 5 seconds
-            if let lot = lastOrderTime where NSDate().timeIntervalSinceDate(lot) < 5 {
-                return
-            }
-            lastOrderTime = NSDate()
-            
-            print("quote at \(askBestPrice); ordering \(buySize) shares at price \(buyPrice) - \(sharesToBuy) goal in total")
-            
-            try engine.buyStock(stockSymbol, price: buyPrice, qty: buySize, timeout: 20)
-
-        } catch let err {
-            print("error buying shares \(err)")
+        
+        if engine.quoteHistory.count < 3 { return } // don't place orders until we've looked at the market a little bit
+        
+        guard let askBestPrice = quote.askBestPrice else { return }
+        
+        if askBestPrice > dontExceedPrice {
+            print("ignoring as over dontExceedPrice of \(dontExceedPrice)")
+            return
         }
+        
+        let targetPrice = askBestPrice - buyUnder
+        
+        let buySize = min(quote.askDepth, blockSize)
+        let buyPrice = min(targetPrice, dontExceedPrice)
+
+
+        let ooCount = engine.outstandingOrdersForStock(stockSymbol).count
+        if ooCount >= concurrentOrderLimit { // don't place more than x concurrent orders
+
+            // if we have any outstanding orders greater than the quote, cancel it
+            let canceledOrders = engine.cancelOrdersForStock(stockSymbol) { o in o.price > (buyPrice + buyUnder + 5) } // don't cancel if close enough
+            
+            if (ooCount - canceledOrders.count) > concurrentOrderLimit {
+                return
+            }
+        }
+        
+        let x = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.price == targetPrice }
+        if x.count > 0 {
+            return
+        }
+        
+        // we want to wait a little bit in between placing orders to avoid impacting the price
+        // the stockfighter "day" is about 5 seconds
+        if let lot = lastOrderTime where NSDate().timeIntervalSinceDate(lot) < 5 {
+            return
+        }
+        lastOrderTime = NSDate()
+        
+        print("quote at \(askBestPrice); ordering \(buySize) shares at price \(buyPrice) - \(sharesToBuy) goal in total")
+        
+        engine.buyStock(stockSymbol, price: buyPrice, qty: buySize, timeout: 20).subscribe()
+
     }
     
     // keep the program running so async websocket doesn't terminate

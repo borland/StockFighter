@@ -62,36 +62,31 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     
     engine.trackQuotesForStock(stockSymbol) { quote in
         
-        do {
-            // just profile the market
-            guard let bid = engine.mapReduceLastQuotes(7, map: { $0.bidBestPrice }, reduce: arrayMin),
-                ask = engine.mapReduceLastQuotes(7, map: { $0.askBestPrice }, reduce: arrayMax) else
-            {
-                return // we don't have enough profiling data to decide to buy or not
-            }
-            
-            let buyPrice = bid + margin
-            try engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Buy && oo.price < buyPrice } // I want to sell lower than others
-            let sellPrice = ask - margin
-            try engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Sell && oo.price > sellPrice } // I want to sell lower than others
-            
-            let expectedProfit = ask - bid
-            if expectedProfit < 50 { return } // no point
-            
-            // buying stocks
-            if outstandingBuys() == 0 && position() < 700 { // don't go too long
-                print("placing bid at \(buyPrice)")
-                try engine.buyStock(stockSymbol, price: buyPrice, qty: blockSize, timeout: 30)
-            }
-            
-            // selling stocks
-            if outstandingSells() == 0 && position() > 0 { // don't sell things I don't have
-                print("placing ask at \(sellPrice)")
-                try engine.sellStock(stockSymbol, price: sellPrice, qty: blockSize, timeout: 30)
-            }
-            
-        } catch let err {
-            print("trading error \(err)")
+        // just profile the market
+        guard let bid = engine.mapReduceLastQuotes(7, map: { $0.bidBestPrice }, reduce: arrayMin),
+            ask = engine.mapReduceLastQuotes(7, map: { $0.askBestPrice }, reduce: arrayMax) else
+        {
+            return // we don't have enough profiling data to decide to buy or not
+        }
+        
+        let buyPrice = bid + margin
+        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Buy && oo.price < buyPrice } // I want to sell lower than others
+        let sellPrice = ask - margin
+        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Sell && oo.price > sellPrice } // I want to sell lower than others
+        
+        let expectedProfit = ask - bid
+        if expectedProfit < 50 { return } // no point
+        
+        // buying stocks
+        if outstandingBuys() == 0 && position() < 700 { // don't go too long
+            print("placing bid at \(buyPrice)")
+            engine.buyStock(stockSymbol, price: buyPrice, qty: blockSize, timeout: 30).subscribe()
+        }
+        
+        // selling stocks
+        if outstandingSells() == 0 && position() > 0 { // don't sell things I don't have
+            print("placing ask at \(sellPrice)")
+            engine.sellStock(stockSymbol, price: sellPrice, qty: blockSize, timeout: 30).subscribe()
         }
     }
     

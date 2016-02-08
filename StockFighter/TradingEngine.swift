@@ -60,9 +60,10 @@ class TradingEngine {
     private var _outstandingOrders:[Int:OutstandingOrder] = [:]
     
     init(apiClient:StockFighterApiClient, account:String, venue:String) {
-        queue = dispatch_queue_create("TradingEngine\(venue)", nil)
         _apiClient = apiClient
         _venue = _apiClient.venue(account: account, name: venue)
+        
+        queue = apiClient.queue
     }
     
     /** Establishes a WebSocket connection to track executions for the given stock, and calls your callback
@@ -82,7 +83,7 @@ class TradingEngine {
             _executionWebsockets[symbol] = _venue.executionsForStock(symbol, queue: queue) { order in
                 lock(self) {
                     guard let _ = self._outstandingOrders[order.id] else { return } // activity from someone else; not tracking this yet
-
+                    
                     if !order.open {
                         print("completed an order")
                         self.processCompletedOrder(order)
@@ -106,8 +107,8 @@ class TradingEngine {
             if _tapeWebsockets[symbol] != nil {
                 fatalError("tracking the same symbol tickerTape twice!") // will have to change if we want to track across venue
             }
-        
-            _tapeWebsockets[symbol] = _venue.tickerTapeForStock(symbol, queue: queue) { [weak self] quote in
+            
+            _tapeWebsockets[symbol] = _venue.tickerTapeForStock(symbol) { [weak self] quote in
                 guard let this = self else { return }
                 lock(this) {
                     this._quoteHistory.append(quote)
@@ -125,7 +126,7 @@ class TradingEngine {
     var position:[String:Int] { return lock(self) { _position } }
     
     var netProfit:Int { return lock(self) { _income - _expenses } }
-
+    
     /** If there aren't count previous quotes for which selector doesn't return nil, return nil */
     func mapReduceLastQuotes(count:Int, map:(QuoteResponse) -> Int?, reduce:([Int] -> Int)) -> Int? {
         let qh = lock(self) { _quoteHistory } // swift arrays are by value
@@ -167,7 +168,7 @@ class TradingEngine {
             return f.count
         }
     }
-
+    
     func outstandingSellCountForStock(symbol:String) -> Int {
         return lock(self) {
             let f = _outstandingOrders.values.filter{ $0.symbol == symbol && $0.direction == .Sell }
@@ -175,21 +176,24 @@ class TradingEngine {
         }
     }
     
-    func buyStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) throws {
-        try placeOrder(.Buy, symbol, price, qty, timeout)
+    @warn_unused_result
+    func buyStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+        return placeOrder(.Buy, symbol, price, qty, timeout)
     }
     
-    func sellStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) throws {
-        try placeOrder(.Sell, symbol, price, qty, timeout)
+    @warn_unused_result
+    func sellStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+        return placeOrder(.Sell, symbol, price, qty, timeout)
     }
     
-    func cancelOrder(oo:OutstandingOrder) throws {
-        try lock(self){
-            if let targetId = _outstandingOrders[oo.id]?.id {
-                let response = try _venue.cancelOrderForStock(oo.symbol, id: targetId)
-
-                // the order may have been filled!
-                processCompletedOrder(response)
+    func cancelOrder(oo:OutstandingOrder) -> AnyObservable<Void> {
+        if let targetId = lock(self, block:{ _outstandingOrders[oo.id]?.id }) {
+            return _venue.cancelOrderForStockAsync(oo.symbol, id: targetId).map { response in
+                
+                lock(self) {
+                    // the order may have been filled!
+                    self.processCompletedOrder(response)
+                }
                 if response.fills.count > 0 {
                     print("cancellation rejected, order was filled at price \(response.price)")
                 }
@@ -198,7 +202,7 @@ class TradingEngine {
                 }
             }
         }
-        
+        return Observable.empty()
     }
     
     /** Shuts down the trading engine, closing all websockets and cancelling any outstanding unfilled orders.
@@ -226,49 +230,49 @@ class TradingEngine {
     
     private func processCompletedOrder(order:OrderResponse) {
         lock(self) {
-        let position = _position[order.symbol] ?? 0
+            let position = _position[order.symbol] ?? 0
             
-        switch(order.direction) {
-        case .Buy:
-            // if we bought some stocks, we spent that money and have more of those stocks
-            _expenses += order.fills.reduce(0){ (m,x) in m + x.qty * x.price }
-            
-            _position[order.symbol] = position + order.fills.reduce(0){ (m,x) in m + x.qty }
-        case .Sell:
-            // if we sold some stocks, we gained that money and have less of those stocks
-            _income += order.fills.reduce(0){ (m,x) in m + x.qty * x.price }
-            
-            _position[order.symbol] = position - order.fills.reduce(0){ (m,x) in m + x.qty }
-        }
-        _outstandingOrders[order.id] = nil // it's no longer an outstanding order
+            switch(order.direction) {
+            case .Buy:
+                // if we bought some stocks, we spent that money and have more of those stocks
+                _expenses += order.fills.reduce(0){ (m,x) in m + x.qty * x.price }
+                
+                _position[order.symbol] = position + order.fills.reduce(0){ (m,x) in m + x.qty }
+            case .Sell:
+                // if we sold some stocks, we gained that money and have less of those stocks
+                _income += order.fills.reduce(0){ (m,x) in m + x.qty * x.price }
+                
+                _position[order.symbol] = position - order.fills.reduce(0){ (m,x) in m + x.qty }
+            }
+            _outstandingOrders[order.id] = nil // it's no longer an outstanding order
         }
     }
     
-    private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) throws {
-        let response = try _venue.placeOrderForStock(symbol, price: price, qty: qty, direction: direction)
-        lock(self) {
-            let order = OutstandingOrder(
-                id:response.id,
-                symbol: response.symbol,
-                price: response.price,
-                qty:response.originalQty,
-                direction:response.direction)
-            
-            _outstandingOrders[response.id] = order
-            
-            if let t = timeout {
-                let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(t * Double(NSEC_PER_SEC)))
-                dispatch_after(delayTime, queue) { [weak self] in
-                    guard let this = self else { return }
-                    lock(this) {
-                        if this._outstandingOrders[order.id] != nil {
-                            print("order timed out!")
-                            do {
-                                try this.cancelOrder(order)
-                            } catch {} // timeout failed, can't do much
+    private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+        return _venue.placeOrderForStockAsync(symbol, price: price, qty: qty, direction: direction).map{ response in
+            lock(self) {
+                let order = OutstandingOrder(
+                    id:response.id,
+                    symbol: response.symbol,
+                    price: response.price,
+                    qty:response.originalQty,
+                    direction:response.direction)
+                
+                self._outstandingOrders[response.id] = order
+                
+                if let t = timeout {
+                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(t * Double(NSEC_PER_SEC)))
+                    dispatch_after(delayTime, self.queue) { [weak self] in
+                        guard let this = self else { return }
+                        lock(this) {
+                            if this._outstandingOrders[order.id] != nil {
+                                print("order timed out!")
+                                this.cancelOrder(order).subscribe()
+                            }
                         }
                     }
                 }
+                return order
             }
         }
     }
@@ -276,14 +280,14 @@ class TradingEngine {
 
 /** Helpers and things which don't directly need to be in the engine go here */
 extension TradingEngine {
-    func cancelOrders(orders:[OutstandingOrder]) throws -> [OutstandingOrder] {
+    func cancelOrders(orders:[OutstandingOrder]) -> [OutstandingOrder] {
         for order in orders {
-            try cancelOrder(order)
+            cancelOrder(order).subscribe()
         }
         return orders
     }
     
-    func cancelOrdersForStock(symbol:String, predicate:(OutstandingOrder) -> Bool) throws -> [OutstandingOrder] {
-        return try cancelOrders(outstandingOrdersForStock(symbol).filter(predicate)) // filter returns an array not a lazy sequence so this is ok
+    func cancelOrdersForStock(symbol:String, predicate:(OutstandingOrder) -> Bool) -> [OutstandingOrder] {
+        return cancelOrders(outstandingOrdersForStock(symbol).filter(predicate)) // filter returns an array not a lazy sequence so this is ok
     }
 }
