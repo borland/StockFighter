@@ -177,16 +177,16 @@ class TradingEngine {
     }
     
     @warn_unused_result
-    func buyStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+    func buyStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> Observable<OutstandingOrder> {
         return placeOrder(.Buy, symbol, price, qty, timeout)
     }
     
     @warn_unused_result
-    func sellStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+    func sellStock(symbol:String, price: Int, qty: Int, timeout:NSTimeInterval? = nil) -> Observable<OutstandingOrder> {
         return placeOrder(.Sell, symbol, price, qty, timeout)
     }
     
-    func cancelOrder(oo:OutstandingOrder) -> AnyObservable<Void> {
+    func cancelOrder(oo:OutstandingOrder) -> Observable<Void> {
         if let targetId = lock(self, block:{ _outstandingOrders[oo.id]?.id }) {
             return _venue.cancelOrderForStockAsync(oo.symbol, id: targetId).map { response in
                 
@@ -248,7 +248,7 @@ class TradingEngine {
         }
     }
     
-    private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) -> AnyObservable<OutstandingOrder> {
+    private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) -> Observable<OutstandingOrder> {
         return _venue.placeOrderForStockAsync(symbol, price: price, qty: qty, direction: direction).map{ response in
             lock(self) {
                 let order = OutstandingOrder(
