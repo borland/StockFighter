@@ -8,29 +8,7 @@
 
 import Foundation
 
-/* Design Ideas/thoughts:
-
-- The trading engine will abstract over the ApiClient so users won't have to deal with the api directly
-- The trading engine will create and own it's own dispatch queue which everything will run on (not worried about perf at this point as our HTTP requests are all still blocking anyway)
-- something like this:
-
-for each stock we'll have
-- our position (number of shares we own)
-- the last quote from the ticker tape (if tracked)
-- a list of all outstanding orders we have on that stock, one for bids, one for asks
-
-engine.trackQuotes(STOCK, callback?) - spins up a stockfighter websocket to get notified of updates to STOCK and calls callbacks
-engine.trackOrders(STOCK, callback?) - spins up a websocket to get notified of orders and calls callback
-
-engine.bid(STOCK, qty, price, type, timeout) - request to BUY. Submits to StockFighter and tracks internally
-engine.ask(STOCK, qty, price, type, timeout) - request to SELL. Submits to StockFighter and tracks internally
-
-If the order is not filled by timeout (NSTimeInterval) the engine will cancel it
-
-engine.orderUpdated(callback) - tells the engine to call this callback when we get activity on a bid or ask we placed
-*/
-
-// Future TODO: tracking a stock across multiple venues? Would require a refactor
+// Future: tracking a stock across multiple venues? Would require a refactor
 class TradingEngine {
     struct OutstandingOrder {
         let id:Int
@@ -57,7 +35,10 @@ class TradingEngine {
     
     private var _position:[String:Int] = [:] // key:Stock symbol, value:How many we have
     private var _lastQuotes:[String:QuoteResponse] = [:] // key:Stock symbol
-    private var _outstandingOrders:[Int:OutstandingOrder] = [:]
+
+    private var _currentOrders:[Int:OutstandingOrder] = [:] // order's we've placed
+    private var _lastPendingOrderId = 0
+    private var _pendingOrders:[Int:OutstandingOrder] = [:] // orders we've sent to the server but haven't received the HTTP response for yet
     
     init(apiClient:StockFighterApiClient, account:String, venue:String) {
         _apiClient = apiClient
@@ -82,7 +63,7 @@ class TradingEngine {
             
             _executionWebsockets[symbol] = _venue.executionsForStock(symbol, queue: queue) { order in
                 lock(self) {
-                    guard let _ = self._outstandingOrders[order.id] else { return } // activity from someone else; not tracking this yet
+                    guard let _ = self._currentOrders[order.id] else { return } // activity from someone else; not tracking this yet
                     
                     if !order.open {
                         print("completed an order")
@@ -158,20 +139,21 @@ class TradingEngine {
      - Returns: Array of outstanding orders */
     func outstandingOrdersForStock(symbol:String) -> [OutstandingOrder] {
         return lock(self) {
-            _outstandingOrders.values.filter{ $0.symbol == symbol }
+            _currentOrders.values.filter{ $0.symbol == symbol } +
+                _pendingOrders.values.filter{ $0.symbol == symbol }
         }
     }
     
     func outstandingBuyCountForStock(symbol:String) -> Int {
         return lock(self) {
-            let f = _outstandingOrders.values.filter{ (oo:OutstandingOrder) in oo.symbol == symbol && oo.direction == .Buy }
+            let f = outstandingOrdersForStock(symbol).filter{ $0.direction == .Buy }
             return f.count
         }
     }
     
     func outstandingSellCountForStock(symbol:String) -> Int {
         return lock(self) {
-            let f = _outstandingOrders.values.filter{ $0.symbol == symbol && $0.direction == .Sell }
+            let f = outstandingOrdersForStock(symbol).filter{ $0.direction == .Sell }
             return f.count
         }
     }
@@ -186,8 +168,9 @@ class TradingEngine {
         return placeOrder(.Sell, symbol, price, qty, timeout)
     }
     
+    @warn_unused_result
     func cancelOrder(oo:OutstandingOrder) -> Observable<Void> {
-        if let targetId = lock(self, block:{ _outstandingOrders[oo.id]?.id }) {
+        if let targetId = lock(self, block:{ _currentOrders[oo.id]?.id }) {
             return _venue.cancelOrderForStockAsync(oo.symbol, id: targetId).map { response in
                 
                 lock(self) {
@@ -211,7 +194,7 @@ class TradingEngine {
         var socketsToClose:[WebSocketClient] = []
         
         lock(self) {
-            for (id, order) in _outstandingOrders {
+            for (id, order) in _currentOrders {
                 do {
                     try _venue.cancelOrderForStock(order.symbol, id: id)
                 } catch {
@@ -244,34 +227,43 @@ class TradingEngine {
                 
                 _position[order.symbol] = position - order.fills.reduce(0){ (m,x) in m + x.qty }
             }
-            _outstandingOrders[order.id] = nil // it's no longer an outstanding order
+            _currentOrders[order.id] = nil // it's no longer an outstanding order
         }
     }
     
+    @warn_unused_result
     private func placeOrder(direction:OrderDirection, _ symbol:String, _ price: Int, _ qty: Int, _ timeout:NSTimeInterval? = nil) -> Observable<OutstandingOrder> {
+        let pendingId:Int = lock(self) {
+            _lastPendingOrderId += 1
+            let p = _lastPendingOrderId
+            _pendingOrders[_lastPendingOrderId] = OutstandingOrder(id: p, symbol: symbol, price: price, qty: qty, direction: direction)
+            return p
+        }
+        
         return _venue.placeOrderForStockAsync(symbol, price: price, qty: qty, direction: direction).map{ response in
-            lock(self) {
-                let order = OutstandingOrder(
-                    id:response.id,
-                    symbol: response.symbol,
-                    price: response.price,
-                    qty:response.originalQty,
-                    direction:response.direction)
-                
-                self._outstandingOrders[response.id] = order
-                
-                if let t = timeout {
-                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(t * Double(NSEC_PER_SEC)))
-                    dispatch_after(delayTime, self.queue) { [weak self] in
-                        guard let this = self else { return }
-                        lock(this) {
-                            if this._outstandingOrders[order.id] != nil {
-                                print("order timed out!")
-                                this.cancelOrder(order).subscribe()
-                            }
+            let order = OutstandingOrder(
+                id:response.id,
+                symbol: response.symbol,
+                price: response.price,
+                qty:response.originalQty,
+                direction:response.direction)
+
+            if let t = timeout {
+                let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(t * Double(NSEC_PER_SEC)))
+                dispatch_after(delayTime, self.queue) { [weak self] in
+                    guard let this = self else { return }
+                    lock(this) {
+                        if this._currentOrders[order.id] != nil {
+                            print("order timed out!")
+                            this.cancelOrder(order).subscribe()
                         }
                     }
                 }
+            }
+            
+            return lock(self) {
+                self._pendingOrders[pendingId] = nil // it's not pending any more
+                self._currentOrders[response.id] = order
                 return order
             }
         }
@@ -288,6 +280,7 @@ extension TradingEngine {
     }
     
     func cancelOrdersForStock(symbol:String, predicate:(OutstandingOrder) -> Bool) -> [OutstandingOrder] {
-        return cancelOrders(outstandingOrdersForStock(symbol).filter(predicate)) // filter returns an array not a lazy sequence so this is ok
+        let ordersToCancel = _currentOrders.values.filter{ $0.symbol == symbol && predicate($0) } // we can't cancel pending orders
+        return cancelOrders(Array(ordersToCancel)) // filter returns an array not a lazy sequence so this is ok
     }
 }

@@ -42,10 +42,9 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         print("completed a \(order.direction): outstanding=\(isOutstanding) position=\(engine.positionForStock(stockSymbol)), profit=\(engine.netProfit)")
     }
     
-    let margin = 0 // under/overbid the market by x cents
+    let margin = 5 // under/overbid the market by x cents
     let blockSize = 250 // it always sells in blockSize even if it doesn't have that many shares
     
-    let position = { engine.positionForStock(stockSymbol) }
     let outstandingBuys = { engine.outstandingOrdersForStock(stockSymbol).filter{ $0.direction == .Buy }.count }
     let outstandingSells = { engine.outstandingOrdersForStock(stockSymbol).filter{ $0.direction == .Sell }.count }
     
@@ -69,23 +68,27 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
             return // we don't have enough profiling data to decide to buy or not
         }
         
-        let buyPrice = bid + margin
-        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Buy && oo.price < buyPrice } // I want to sell lower than others
-        let sellPrice = ask - margin
-        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Sell && oo.price > sellPrice } // I want to sell lower than others
-        
         let expectedProfit = ask - bid
         if expectedProfit < 50 { return } // no point
+
+        // buy below market, sell above. It doesn't make sense, but we'll see if it works
+        let buyPrice = bid - margin
+        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Buy && oo.price < buyPrice }
+        let sellPrice = ask + margin
+        engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Sell && oo.price > sellPrice }
+        
+        let position = engine.positionForStock(stockSymbol)
         
         // buying stocks
-        if outstandingBuys() == 0 && position() < 700 { // don't go too long
+        if outstandingBuys() == 0 && position < 700 { // don't go too long
             print("placing bid at \(buyPrice)")
             engine.buyStock(stockSymbol, price: buyPrice, qty: blockSize, timeout: 30).subscribe()
         }
         
         // selling stocks
-        if outstandingSells() == 0 && position() > 0 { // don't sell things I don't have
-            print("placing ask at \(sellPrice)")
+        if outstandingSells() == 0 && position > 0 {
+            let sellCount = min(blockSize, position)  // don't sell things I don't have
+            print("placing ask for \(sellCount) at \(sellPrice)")
             engine.sellStock(stockSymbol, price: sellPrice, qty: blockSize, timeout: 30).subscribe()
         }
     }
