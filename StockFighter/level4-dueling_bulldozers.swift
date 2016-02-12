@@ -1,23 +1,21 @@
 //
-//  File.swift
+//  level4-dueling_bulldozers.swift
 //  StockFighter
 //
-//  Created by Orion Edwards on 3/02/16.
+//  Created by Orion Edwards on 13/02/16.
 //  Copyright © 2016 Orion Edwards. All rights reserved.
 //
 
 import Foundation
 
-func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
-    
+func dueling_bulldozers(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     var tradingAccount = ""
     var venueIdentifier = ""
     var stockSymbol = ""
     
     // use the GM api to pick up account.etc
     do {
-        let info = try gm.startLevel("sell_side")
-        
+        let info = try gm.startLevel("dueling_bulldozers")
         tradingAccount = info.account
         venueIdentifier = info.venues[0]
         stockSymbol = info.tickers[0]
@@ -26,14 +24,13 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     } catch let err {
         print("GM error \(err)")
         return
-        
     }
     
     let venue = apiClient.venue(account:tradingAccount, name:venueIdentifier)
     try! venue.heartbeat()
     
     let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier)
-
+    
     engine.trackOrdersForStock(stockSymbol) { order in
         let isOutstanding = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.id == order.id }.count > 0
         
@@ -71,7 +68,7 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         
         let expectedProfit = ask - bid
         if expectedProfit < 50 { return } // no point
-
+        
         // go inside the spread
         let buyPrice = bid + margin
         engine.cancelOrdersForStock(stockSymbol){ oo in oo.direction == .Buy && oo.price > buyPrice }
@@ -90,7 +87,7 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         if outstandingBuys == 0 && position < buffer { // only buy if not already buying. Slew the order size so as not to go too long
             let qty = percentOutOfRange > 0 ?
                 Int(max(5, (Float(blockSize) * (1-percentOutOfRange)))) : // don't buy negative shares
-                blockSize
+            blockSize
             
             print("placing bid for \(qty) at \(buyPrice)")
             engine.buyStock(stockSymbol, price: buyPrice, qty: qty, timeout: 6).subscribe()
@@ -99,7 +96,7 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
         if outstandingSells == 0 && position > -buffer { // only sell if not already selling. Slew the order size so as not to go too short
             let qty = percentOutOfRange < 0 ?
                 Int(max(5, (Float(blockSize) * (1+percentOutOfRange)))) : // don't sell negative shares
-                blockSize
+            blockSize
             
             print("placing ask for \(qty) at \(sellPrice)")
             engine.sellStock(stockSymbol, price: sellPrice, qty: qty, timeout: 6).subscribe()

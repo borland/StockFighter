@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D36282C91C6E536B00686731 /* level4-dueling_bulldozers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D36282C81C6E536B00686731 /* level4-dueling_bulldozers.swift */; };
 		D369E2D91C56883F00DDB2AA /* HttpClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D11C56883F00DDB2AA /* HttpClient.swift */; };
 		D369E2DB1C56883F00DDB2AA /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D369E2D41C56883F00DDB2AA /* SocketRocket.framework */; };
 		D369E2DC1C56883F00DDB2AA /* StockFighterApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D51C56883F00DDB2AA /* StockFighterApiClient.swift */; };
@@ -37,6 +38,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D36282C81C6E536B00686731 /* level4-dueling_bulldozers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "level4-dueling_bulldozers.swift"; sourceTree = "<group>"; };
 		D369E2D11C56883F00DDB2AA /* HttpClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = HttpClient.swift; path = StockFighterApiClient/HttpClient.swift; sourceTree = SOURCE_ROOT; };
 		D369E2D21C56883F00DDB2AA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = LICENSE; path = StockFighterApiClient/LICENSE; sourceTree = SOURCE_ROOT; };
 		D369E2D31C56883F00DDB2AA /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = StockFighterApiClient/README.md; sourceTree = SOURCE_ROOT; };
@@ -113,6 +115,7 @@
 				D3F873381C5A86930046B343 /* level1-first_steps.swift */,
 				D39031561C53EB5C00D222FA /* level2-chock_a_block.swift */,
 				D3DCEE741C61135400A1C441 /* level3-sell_side.swift */,
+				D36282C81C6E536B00686731 /* level4-dueling_bulldozers.swift */,
 			);
 			path = StockFighter;
 			sourceTree = "<group>";
@@ -178,6 +181,7 @@
 				D369E2DC1C56883F00DDB2AA /* StockFighterApiClient.swift in Sources */,
 				D3A7C5151C29BFC000634BBF /* main.swift in Sources */,
 				D3B8D1571C691E9F00E4CDE5 /* AsyncHttpClient.swift in Sources */,
+				D36282C91C6E536B00686731 /* level4-dueling_bulldozers.swift in Sources */,
 				D3B8D1581C691E9F00E4CDE5 /* MiniRxSwift.swift in Sources */,
 				D39031571C53EB5C00D222FA /* level2-chock_a_block.swift in Sources */,
 				D369E2DF1C56883F00DDB2AA /* WebSocketClient.swift in Sources */,
