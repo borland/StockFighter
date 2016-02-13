@@ -122,7 +122,7 @@ class TradingEngine {
     
     var balance:Int { return lock(self) { _balance } }
     
-    /** Returns cash balance - value of stocks held (based on the last quote best sell price) */
+    /** Returns cash balance - value of stocks held (based on the last trade price) */
     func netAssetValue() -> Int? {
         return lock(self) {
             _position.reduce(Int?(_balance)) { (m, tuple) in
@@ -130,7 +130,7 @@ class TradingEngine {
                 let (symbol, position) = tuple
                 if position == 0 { return current }
                 
-                if let askPrice = _quoteHistory[symbol]?.reverse().detect({ $0.askBestPrice })  {
+                if let askPrice = _quoteHistory[symbol]?.lazy.reverse().detect({ $0.lastTradePrice })  {
                     return current + askPrice * position
                 } else {
                     return nil // we couldn't find a quote or a price for that stock so we can't calcluate NAV
@@ -328,11 +328,12 @@ class TradingEngine {
                 let data = try NSData(contentsOfFile: "./engineState", options: NSDataReadingOptions(rawValue: 0))
                 
                 if let state = try NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions(rawValue: 0)) as? [String:AnyObject] {
-                    if let b = state["balance"] as? Int {
-                        _balance = b
-                    }
                     if let p = state[_venue.name] as? [String:Int] {
                         _position = p
+                        // if we don't match the venue name then don't restore the balance either as the level has obviously restarted
+                        if let b = state["balance"] as? Int {
+                            _balance = b
+                        }
                     }
                 }
             } catch { }
