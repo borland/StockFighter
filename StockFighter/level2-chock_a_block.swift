@@ -62,7 +62,7 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     
     var sharesToBuy = targetShares
     
-    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier)
+    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier, initialBalance: 0)
     engine.trackOrdersForStock(stockSymbol) { order in
         if order.open { return } // only interested in filled orders
         
@@ -77,7 +77,7 @@ func chock_a_block(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     
     engine.trackQuotesForStock(stockSymbol) { quote in
         
-        if engine.quoteHistory.count < 3 { return } // don't place orders until we've looked at the market a little bit
+        if engine.quoteHistoryForStock(stockSymbol).count < 3 { return } // don't place orders until we've looked at the market a little bit
         
         guard let askBestPrice = quote.askBestPrice else { return }
         

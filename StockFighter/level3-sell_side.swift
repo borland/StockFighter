@@ -32,7 +32,7 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     let venue = apiClient.venue(account:tradingAccount, name:venueIdentifier)
     try! venue.heartbeat()
     
-    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier)
+    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier, initialBalance: 0)
 
     engine.trackOrdersForStock(stockSymbol) { order in
         let isOutstanding = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.id == order.id }.count > 0
@@ -63,8 +63,8 @@ func sell_side(apiClient:StockFighterApiClient, _ gm:StockFighterGmClient) {
     engine.trackQuotesForStock(stockSymbol) { quote in
         
         // profile the market
-        guard let bid = engine.mapReduceLastQuotes(7, map: { $0.bidBestPrice }, reduce: arrayMin),
-            ask = engine.mapReduceLastQuotes(7, map: { $0.askBestPrice }, reduce: arrayMax) else
+        guard let bid = engine.mapQuotesForStock(stockSymbol, count: 7, map: { $0.bidBestPrice }, reduce: arrayMin),
+            ask = engine.mapQuotesForStock(stockSymbol, count: 7, map: { $0.askBestPrice }, reduce: arrayMax) else
         {
             return // we don't have enough profiling data to decide to buy or not
         }

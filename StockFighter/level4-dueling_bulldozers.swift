@@ -15,7 +15,7 @@ func dueling_bulldozers(apiClient:StockFighterApiClient, _ gm:StockFighterGmClie
     
     // use the GM api to pick up account.etc
     do {
-        let info = try gm.startLevel("dueling_bulldozers")
+        let info = try gm.startLevel("sell_side") // play level 3 to build our score counter
         tradingAccount = info.account
         venueIdentifier = info.venues[0]
         stockSymbol = info.tickers[0]
@@ -29,13 +29,12 @@ func dueling_bulldozers(apiClient:StockFighterApiClient, _ gm:StockFighterGmClie
     let venue = apiClient.venue(account:tradingAccount, name:venueIdentifier)
     try! venue.heartbeat()
     
-    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier)
+    let engine = TradingEngine(apiClient: apiClient, account: tradingAccount, venue: venueIdentifier, initialBalance: 0)
+    print("restore: position=\(engine.positionForStock(stockSymbol)) balance=\(engine.balance) NAV=\(engine.netAssetValue())")
     
-    engine.trackOrdersForStock(stockSymbol) { order in
-        let isOutstanding = engine.outstandingOrdersForStock(stockSymbol).filter{ $0.id == order.id }.count > 0
-        
-        if order.open { return }
-        print("completed a \(order.direction): outstanding=\(isOutstanding) position=\(engine.positionForStock(stockSymbol))")
+    engine.trackOrdersForStock(stockSymbol)
+    engine.onOrderCompleted =  { order in
+        print("completed \(order.direction): position=\(engine.positionForStock(stockSymbol)) balance=\(engine.balance) NAV=\(engine.netAssetValue())")
     }
     
     let margin = 50 // under/overbid the market by x cents
@@ -60,8 +59,8 @@ func dueling_bulldozers(apiClient:StockFighterApiClient, _ gm:StockFighterGmClie
     engine.trackQuotesForStock(stockSymbol) { quote in
         
         // profile the market
-        guard let bid = engine.mapReduceLastQuotes(7, map: { $0.bidBestPrice }, reduce: arrayMin),
-            ask = engine.mapReduceLastQuotes(7, map: { $0.askBestPrice }, reduce: arrayMax) else
+        guard let bid = engine.mapQuotesForStock(stockSymbol, count: 7, map: { $0.bidBestPrice }, reduce: arrayMin),
+            ask = engine.mapQuotesForStock(stockSymbol,count: 7, map: { $0.askBestPrice }, reduce: arrayMax) else
         {
             return // we don't have enough profiling data to decide to buy or not
         }
