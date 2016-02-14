@@ -12,7 +12,6 @@
 		D369E2DB1C56883F00DDB2AA /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D369E2D41C56883F00DDB2AA /* SocketRocket.framework */; };
 		D369E2DC1C56883F00DDB2AA /* StockFighterApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D51C56883F00DDB2AA /* StockFighterApiClient.swift */; };
 		D369E2DD1C56883F00DDB2AA /* StockFighterGmClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D61C56883F00DDB2AA /* StockFighterGmClient.swift */; };
-		D369E2DE1C56883F00DDB2AA /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D71C56883F00DDB2AA /* Utils.swift */; };
 		D369E2DF1C56883F00DDB2AA /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369E2D81C56883F00DDB2AA /* WebSocketClient.swift */; };
 		D369E2E01C56885D00DDB2AA /* SocketRocket.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = D369E2D41C56883F00DDB2AA /* SocketRocket.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D39031571C53EB5C00D222FA /* level2-chock_a_block.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39031561C53EB5C00D222FA /* level2-chock_a_block.swift */; };
@@ -45,7 +44,6 @@
 		D369E2D41C56883F00DDB2AA /* SocketRocket.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SocketRocket.framework; path = StockFighterApiClient/SocketRocket.framework; sourceTree = SOURCE_ROOT; };
 		D369E2D51C56883F00DDB2AA /* StockFighterApiClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StockFighterApiClient.swift; path = StockFighterApiClient/StockFighterApiClient.swift; sourceTree = SOURCE_ROOT; };
 		D369E2D61C56883F00DDB2AA /* StockFighterGmClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StockFighterGmClient.swift; path = StockFighterApiClient/StockFighterGmClient.swift; sourceTree = SOURCE_ROOT; };
-		D369E2D71C56883F00DDB2AA /* Utils.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Utils.swift; path = StockFighterApiClient/Utils.swift; sourceTree = SOURCE_ROOT; };
 		D369E2D81C56883F00DDB2AA /* WebSocketClient.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = WebSocketClient.swift; path = StockFighterApiClient/WebSocketClient.swift; sourceTree = SOURCE_ROOT; };
 		D39031561C53EB5C00D222FA /* level2-chock_a_block.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "level2-chock_a_block.swift"; sourceTree = "<group>"; };
 		D390315A1C53F0FF00D222FA /* TradingEngine.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TradingEngine.swift; sourceTree = "<group>"; };
@@ -82,7 +80,6 @@
 				D369E2D41C56883F00DDB2AA /* SocketRocket.framework */,
 				D369E2D51C56883F00DDB2AA /* StockFighterApiClient.swift */,
 				D369E2D61C56883F00DDB2AA /* StockFighterGmClient.swift */,
-				D369E2D71C56883F00DDB2AA /* Utils.swift */,
 				D369E2D81C56883F00DDB2AA /* WebSocketClient.swift */,
 			);
 			name = StockFighterApiClient;
@@ -189,7 +186,6 @@
 				D3F873391C5A86930046B343 /* level1-first_steps.swift in Sources */,
 				D369E2D91C56883F00DDB2AA /* HttpClient.swift in Sources */,
 				D390315B1C53F0FF00D222FA /* TradingEngine.swift in Sources */,
-				D369E2DE1C56883F00DDB2AA /* Utils.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
